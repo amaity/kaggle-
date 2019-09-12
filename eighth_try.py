@@ -47,8 +47,8 @@ test['Hillshade'] = (test[cols]*weights).sum(1)
 
 #trying a feature set based on soil description
 
-soil_description = """
-1 Cathedral family - Rock outcrop complex, extremely stony.
+soil_description = \
+"""1 Cathedral family - Rock outcrop complex, extremely stony.
 2 Vanet - Ratake families complex, very stony.
 3 Haploborolis - Rock outcrop complex, rubbly.
 4 Ratake family - Rock outcrop complex, rubbly.
@@ -90,11 +90,19 @@ soil_description = """
 40 Moran family - Cryorthents - Rock land complex, extremely stony.
 """
 import re
-soil_type = list(filter(None, re.split("[,\-\n\d]+", soil_description)) )
-soil_type = [i.strip() for i in soil_type]
-soil_type.remove('Rock outcrop complex complex')
-soil_type = list(set(soil_type))
-print(len(soil_type))
+#soil_type = list(filter(None, re.split(r"[,\-\n\d]+", soil_description)) )
+#soil_type = [i.strip() for i in soil_type]
+#soil_type.remove('Rock outcrop complex complex')
+#soil_type = list(set(soil_type))
+#print(np(soil_type)) 
+lines = soil_description.splitlines()
+tmp = [re.split(r"[.,\-\d]+", line) for line in lines]
+tmp = [[s.strip() for s in lst] for lst in tmp]
+tmp = [list(filter(None, lst)) for lst in tmp]
+print(tmp)
+#tmp = [item for sublist in tmp for item in sublist]
+#soil_type = list(filter(bool, [i.strip() for i in tmp]))
+#print(soil_type)
 
 ##SPLIT------------------------------------------------------------------------
 
