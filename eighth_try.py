@@ -122,10 +122,20 @@ b = np.array(['Legault families complex', 'Ratake families complex', 'Supervisor
 'Moran families', 'Catamount families complex', 'Gateview family', 'Bullwark', 
 'unspecified in the USFS Soil and ELU Survey', 'Bross family', 'Como', 
 'Cryaquolis complex', 'Borohemists complex', 'Typic Cryaquolls'])
-#c = np.array([np.isin(np.array(soil_class), el) for el in np.array(soil_type)])
-for el in np.array(soil_type):
-    print(el, np.where(np.array(soil_class)==el[0]),(np.isin(np.array(soil_class), el)) )
-#print(a, np.where(b=='Cathedral family'), np.isin(b,a))
+c = np.array([np.in1d(np.array(soil_class), el) for el in np.array(soil_type)])
+#for el in np.array(soil_type):
+#    print(el, np.where(np.array(soil_class)==el[0]),(np.in1d(np.array(soil_class), el)) )
+df = pd.DataFrame(data=c, index=range(1,41), columns=soil_class)
+
+print(X.columns)
+
+X = X.loc[:, :'Wilderness_Area4'].join(X.loc[:,'Soil_Type1':'Soil_Type40'] \
+                          .dot(range(1,41)).to_frame('Soil_Type1')) \
+                          .join(X.loc[:,'Distance_to_hydrology':])
+
+df_ = df.reindex(list(X['Soil_Type1'])).reset_index(drop=True)
+X = pd.concat([X, df_], axis=1)
+print(X.columns)
 
 ##SPLIT------------------------------------------------------------------------
 
