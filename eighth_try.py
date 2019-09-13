@@ -52,7 +52,7 @@ soil_description = \
 2 Vanet - Ratake families complex, very stony.
 3 Haploborolis - Rock outcrop complex, rubbly.
 4 Ratake family - Rock outcrop complex, rubbly.
-5 Vanet family - Rock outcrop complex complex, rubbly.
+5 Vanet family - Rock outcrop complex, rubbly.
 6 Vanet - Wetmore families - Rock outcrop complex, stony.
 7 Gothic family.
 8 Supervisor - Limber families complex.
@@ -98,11 +98,34 @@ import re
 lines = soil_description.splitlines()
 tmp = [re.split(r"[.,\-\d]+", line) for line in lines]
 tmp = [[s.strip() for s in lst] for lst in tmp]
-tmp = [list(filter(None, lst)) for lst in tmp]
-print(tmp)
-#tmp = [item for sublist in tmp for item in sublist]
-#soil_type = list(filter(bool, [i.strip() for i in tmp]))
+soil_type = [list(filter(None, lst)) for lst in tmp]
+#soil_type = np.array([np.array(i) for i in soil_type])
 #print(soil_type)
+soil_class = list(set([item for sublist in soil_type for item in sublist]))
+#soil_type = list(filter(bool, [i.strip() for i in tmp]))
+#print(soil_class)
+#https://stackoverflow.com/questions/53631460/using-numpy-isin-element-wise
+#soil_type_array = (np.array(soil_class)==soil_type[...,None]).any(axis=1)
+#print(soil_type)
+
+a = np.array(['Cathedral family', 'Rock outcrop complex', 'extremely stony'])
+b = np.array(['Legault families complex', 'Ratake families complex', 'Supervisor', 'Rock land', 
+'Bullwark family complex', 'Typic Cryaquolis', 'Rock outcrop', 'Rock land complex', 'Typic Cryaquepts', 
+'Leighcan family complex', 'Cryorthents', 'Cryaquepts complex', 'till substratum', 'rubbly', 
+'Catamount families', 'warm', 'extremely bouldery', 'Wetmore families', 'Leighcan family', 
+'Aquolis complex', 'extremely stony', 'Cryumbrepts complex', 'Ratake family', 'Cryaquolls complex', 
+'Rock outcrop complex', 'Moran family', 'Gothic family', 'Rogert family', 'Legault family complex', 
+'Cryaquolis', 'Cathedral family', 'Legault family', 'Cryoborolis complex', 'Como family', 
+'Limber families complex', 'Pachic Argiborolis', 'Cryorthents complex', 'Troutville family', 
+'Granile', 'Leighcan', 'very stony', 'stony', 'Catamount family', 'Vanet', 'Haploborolis', 
+'Vanet family', 'till substratum complex', 'Typic Cryaquolls complex', 'Cryumbrepts', 
+'Moran families', 'Catamount families complex', 'Gateview family', 'Bullwark', 
+'unspecified in the USFS Soil and ELU Survey', 'Bross family', 'Como', 
+'Cryaquolis complex', 'Borohemists complex', 'Typic Cryaquolls'])
+#c = np.array([np.isin(np.array(soil_class), el) for el in np.array(soil_type)])
+for el in np.array(soil_type):
+    print(el, np.where(np.array(soil_class)==el[0]),(np.isin(np.array(soil_class), el)) )
+#print(a, np.where(b=='Cathedral family'), np.isin(b,a))
 
 ##SPLIT------------------------------------------------------------------------
 
