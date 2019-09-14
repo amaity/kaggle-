@@ -107,6 +107,12 @@ soil_class = list(set([item for sublist in soil_type for item in sublist]))
 #https://stackoverflow.com/questions/53631460/using-numpy-isin-element-wise
 #soil_type_array = (np.array(soil_class)==soil_type[...,None]).any(axis=1)
 #print(soil_type)
+rocky = [s for s in soil_class if "Rock" in s]
+print('rocky: ',rocky)
+stony = [s for s in soil_class if "stony" in s]
+print('stony: ',stony)
+rubbly = [s for s in soil_class if "rubbly" in s]
+print('rubbly: ',rubbly)
 
 a = np.array(['Cathedral family', 'Rock outcrop complex', 'extremely stony'])
 b = np.array(['Legault families complex', 'Ratake families complex', 'Supervisor', 'Rock land', 
@@ -122,20 +128,28 @@ b = np.array(['Legault families complex', 'Ratake families complex', 'Supervisor
 'Moran families', 'Catamount families complex', 'Gateview family', 'Bullwark', 
 'unspecified in the USFS Soil and ELU Survey', 'Bross family', 'Como', 
 'Cryaquolis complex', 'Borohemists complex', 'Typic Cryaquolls'])
-c = np.array([np.in1d(np.array(soil_class), el) for el in np.array(soil_type)])
+c = np.array([np.in1d(np.array(soil_class), el) for el in np.array(soil_type)]).astype(int)
 #for el in np.array(soil_type):
 #    print(el, np.where(np.array(soil_class)==el[0]),(np.in1d(np.array(soil_class), el)) )
-df = pd.DataFrame(data=c, index=range(1,41), columns=soil_class)
+scf = pd.DataFrame(data=c, index=range(1,41), columns=soil_class)
+scf['rocky'] = np.logical_or.reduce(scf[rocky], axis=1)
+scf['stony'] = np.logical_or.reduce(scf[stony], axis=1)
+scf = scf[['rocky','stony','rubbly']]
 
-print(X.columns)
+def transformSoilCols(df):
+    df['Soil_Type'] = np.nan
+    df = df.loc[:, :'Wilderness_Area4'].join(df.loc[:,'Soil_Type1':'Soil_Type40'] \
+                          .dot(range(1,41)).to_frame('Soil_Type')) \
+                          .join(df.loc[:,'Distance_to_hydrology':])
+    df_ = scf.reindex(list(df['Soil_Type'])).reset_index(drop=True)
+    df = pd.concat([df, df_], axis=1)
+    df = df.drop(['Soil_Type'], axis = 1)
+    return df
 
-X = X.loc[:, :'Wilderness_Area4'].join(X.loc[:,'Soil_Type1':'Soil_Type40'] \
-                          .dot(range(1,41)).to_frame('Soil_Type1')) \
-                          .join(X.loc[:,'Distance_to_hydrology':])
+X = transformSoilCols(X)
+#test = transformSoilCols(test)
 
-df_ = df.reindex(list(X['Soil_Type1'])).reset_index(drop=True)
-X = pd.concat([X, df_], axis=1)
-print(X.columns)
+
 
 ##SPLIT------------------------------------------------------------------------
 
