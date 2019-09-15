@@ -1,10 +1,5 @@
-import os, pickle
 import numpy as np 
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.model_selection import GridSearchCV
-from sklearn.metrics import classification_report
-from sklearn.svm import SVC
 
 #reading the files
 train = pd.read_csv("train.csv")
@@ -14,80 +9,231 @@ test = pd.read_csv("test.csv")
 y = train.Cover_Type
 test_id = test['Id']
 
-import os, pickle
+#dropping Ids
+train = train.drop(['Id'], axis = 1)
+test = test.drop(['Id'], axis = 1)
 
-if os.path.isfile("/X.pickle"):
-    with open( "X.pickle", "rb" ) as fh1:
-        X = pickle.load(fh1)
-    with open('test.pickle', 'rb') as fh2:
-        test = pickle.load(fh2)
-else:
-    #dropping Soil_Type7 and Soil_Type15
-    train = train.drop(['Id','Soil_Type7', 'Soil_Type15'], axis = 1)
-    test = test.drop(['Id','Soil_Type7', 'Soil_Type15'], axis = 1)
+#prepare data for training the model
+X = train.drop(['Cover_Type'], axis = 1)
 
-    #prepare data for training the model
-    X = train.drop(['Cover_Type'], axis = 1)
+##FEATURE_IMPORTANCES----------------------------------------------------------
 
-    #reducing Soil_Type cols to single col 
-    X = X.iloc[:, :14].join(X.iloc[:, 14:].dot(range(1,39)).to_frame('Soil_Type1'))
-    test = test.iloc[:, :14].join(test.iloc[:, 14:].dot(range(1,39)).to_frame('Soil_Type1'))
-    #print(X.columns)
-    #reducing Wilderness_Area to single col 
-    X = X.iloc[:,:10].join(X.iloc[:,10:-1].dot(range(1,5)).to_frame('Wilderness_Area1')).join(X.iloc[:,-1])
-    test = test.iloc[:,:10].join(test.iloc[:,10:-1].dot(range(1,5)).to_frame('Wilderness_Area1')).join(test.iloc[:,-1])
+from sklearn.ensemble import RandomForestClassifier
+clf = RandomForestClassifier(random_state=1)
+clf = clf.fit(X,y)
 
-    #pickling data for quick access
-    with open('X.pickle', 'wb') as fh1:
-        pickle.dump(X, fh1)
-    with open('test.pickle', 'wb') as fh2:
-        pickle.dump(test, fh2)
+import matplotlib.pyplot as plt
+import seaborn as sns
+sns.set(style="whitegrid")
 
+features = pd.DataFrame({'Features': X.columns, 
+                         'Importances': clf.feature_importances_})
+sns.barplot(x='Features', y='Importances', data=features)
+plt.xticks(rotation='vertical')
+plt.show()
+
+##PREPROCESS-------------------------------------------------------------------
+
+#horizontal and vertical distance to hydrology can be easily combined
+cols = ['Horizontal_Distance_To_Hydrology', 'Vertical_Distance_To_Hydrology']
+X['Distance_to_hydrology'] = X[cols].apply(np.linalg.norm, axis=1)
+test['Distance_to_hydrology'] = test[cols].apply(np.linalg.norm, axis=1)
+
+#adding a few combinations of distance features to help enhance the classification
+cols = ['Horizontal_Distance_To_Roadways',
+        'Horizontal_Distance_To_Fire_Points',
+        'Horizontal_Distance_To_Hydrology']
+
+def addDistFeatures(df):
+    df['distance_mean'] = df[cols].mean(axis=1)
+    df['distance_sum'] = df[cols].sum(axis=1)
+    df['distance_dif_road_fire'] = df[cols[0]] - df[cols[1]]
+    df['distance_dif_hydro_road'] = df[cols[2]] - df[cols[0]]
+    df['distance_dif_hydro_fire'] = df[cols[2]] - df[cols[1]]
+    return df
+
+X = addDistFeatures(X)
+test = addDistFeatures(test)
+
+#persisting with the idea of adding simple combination of Hillshades
+cols = ['Hillshade_9am', 'Hillshade_Noon', 'Hillshade_3pm']
+weights = pd.Series([0.299, 0.587, 0.114], index=cols)
+X['Hillshade'] = (X[cols]*weights).sum(1)
+test['Hillshade'] = (test[cols]*weights).sum(1)
+
+#trying a feature set based on soil description
+
+soil_description = \
+"""1 Cathedral family - Rock outcrop complex, extremely stony.
+2 Vanet - Ratake families complex, very stony.
+3 Haploborolis - Rock outcrop complex, rubbly.
+4 Ratake family - Rock outcrop complex, rubbly.
+5 Vanet family - Rock outcrop complex, rubbly.
+6 Vanet - Wetmore families - Rock outcrop complex, stony.
+7 Gothic family.
+8 Supervisor - Limber families complex.
+9 Troutville family, very stony.
+10 Bullwark - Catamount families - Rock outcrop complex, rubbly.
+11 Bullwark - Catamount families - Rock land complex, rubbly.
+12 Legault family - Rock land complex, stony.
+13 Catamount family - Rock land - Bullwark family complex, rubbly.
+14 Pachic Argiborolis - Aquolis complex.
+15 unspecified in the USFS Soil and ELU Survey.
+16 Cryaquolis - Cryoborolis complex.
+17 Gateview family - Cryaquolis complex.
+18 Rogert family, very stony.
+19 Typic Cryaquolis - Borohemists complex.
+20 Typic Cryaquepts - Typic Cryaquolls complex.
+21 Typic Cryaquolls - Leighcan family, till substratum complex.
+22 Leighcan family, till substratum, extremely bouldery.
+23 Leighcan family, till substratum - Typic Cryaquolls complex.
+24 Leighcan family, extremely stony.
+25 Leighcan family, warm, extremely stony.
+26 Granile - Catamount families complex, very stony.
+27 Leighcan family, warm - Rock outcrop complex, extremely stony.
+28 Leighcan family - Rock outcrop complex, extremely stony.
+29 Como - Legault families complex, extremely stony.
+30 Como family - Rock land - Legault family complex, extremely stony.
+31 Leighcan - Catamount families complex, extremely stony.
+32 Catamount family - Rock outcrop - Leighcan family complex, extremely stony.
+33 Leighcan - Catamount families - Rock outcrop complex, extremely stony.
+34 Cryorthents - Rock land complex, extremely stony.
+35 Cryumbrepts - Rock outcrop - Cryaquepts complex.
+36 Bross family - Rock land - Cryumbrepts complex, extremely stony.
+37 Rock outcrop - Cryumbrepts - Cryorthents complex, extremely stony.
+38 Leighcan - Moran families - Cryaquolls complex, extremely stony.
+39 Moran family - Cryorthents - Leighcan family complex, extremely stony.
+40 Moran family - Cryorthents - Rock land complex, extremely stony.
+"""
+import re
+#soil_type = list(filter(None, re.split(r"[,\-\n\d]+", soil_description)) )
+#soil_type = [i.strip() for i in soil_type]
+#soil_type.remove('Rock outcrop complex complex')
+#soil_type = list(set(soil_type))
+#print(np(soil_type)) 
+lines = soil_description.splitlines()
+tmp = [re.split(r"[.,\-\d]+", line) for line in lines]
+tmp = [[s.strip() for s in lst] for lst in tmp]
+soil_type = [list(filter(None, lst)) for lst in tmp]
+#soil_type = np.array([np.array(i) for i in soil_type])
+#print(soil_type)
+soil_class = list(set([item for sublist in soil_type for item in sublist]))
+#soil_type = list(filter(bool, [i.strip() for i in tmp]))
+#print(soil_class)
+#https://stackoverflow.com/questions/53631460/using-numpy-isin-element-wise
+#soil_type_array = (np.array(soil_class)==soil_type[...,None]).any(axis=1)
+#print(soil_type)
+rocky = [s for s in soil_class if "Rock" in s]
+stony = [s for s in soil_class if "stony" in s]
+rubbly = [s for s in soil_class if "rubbly" in s]
+
+c = np.array([np.in1d(np.array(soil_class), el) for el in np.array(soil_type)]).astype(int)
+#for el in np.array(soil_type):
+#    print(el, np.where(np.array(soil_class)==el[0]),(np.in1d(np.array(soil_class), el)) )
+scf = pd.DataFrame(data=c, index=range(1,41), columns=soil_class)
+scf['rocky'] = np.logical_or.reduce(scf[rocky], axis=1)
+scf['stony'] = np.logical_or.reduce(scf[stony], axis=1)
+scf = scf[['rocky','stony','rubbly']]
+
+def transformSoilCols(df):
+    df_s = df.loc[:,'Soil_Type1':'Soil_Type40']
+    df = df.loc[:, :'Wilderness_Area4'].join(df.loc[:,'Soil_Type1':'Soil_Type40'] \
+                          .dot(range(1,41)).to_frame('Soil_Type1')) \
+                          .join(df.loc[:,'Distance_to_hydrology':])
+    df_c = scf.reindex(list(df['Soil_Type1'])).reset_index(drop=True)
+    df = df.drop(['Soil_Type1'], axis = 1)
+    df = pd.concat([df, df_s, df_c], axis=1) 
+    return df
+
+X = transformSoilCols(X)
 print(X.columns)
+test = transformSoilCols(test)
 
-#split data
+{
+    'Gothic family': [Elevation - 2200 to 3200 meters, Slope: 2 to 60 percent],
+    'Cathedral family': [Elevation: 1890 to 3000 meters, Slope: 2 to 100 percent],
+    'Vanet family': [Elevations: 2370 to 2590 meters, Slope: 20 to 40 percent],
+    'Ratake family': [_, Slope: 2 to 60 percent],
+    'Rogert family': [Elevation: 2300 to 3300 meters, Slopes: 3 to 100 percent],
+    'Legault family': [Elevation: 2286 to 3474 meters, Slope: 5 to 80 percent],
+    'Moran family': [Elevation: 1980 to 3350 meters, Slope: 0 to 70 percent],
+    'Bross family': [Elevation: 3048 to 4267 meters, Slope: 2 to 50 percent],
+    'Catamount family': [Elevation: 2438 to 3505 meters, Slope: 5 to 70 percent],
+    'Catamount-Bullwark-Rock outcrop complex': 10 to 40 percent slopes,
+
+}
+
+
+##SPLIT------------------------------------------------------------------------
+
 from sklearn.model_selection import train_test_split
-X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2)
+X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.3)
 
-from sklearn.model_selection import GridSearchCV 
+##PLOT-------------------------------------------------------------------------
 
-# defining parameter range 
-param_grid = [  {'kernel': ['linear'], 'C': [0.1, 1, 10, 100]},
-                {'kernel': ['rbf'], 'gamma': [1e-3, 1e-4], 'C': [1, 10, 100, 1000]}]  
-scores = ['precision', 'recall']
+param_grid = {"n_estimators":  [int(x) for x in np.linspace(start = 10, stop = 200, num = 11)],
+              "max_depth": [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, None],
+              "min_samples_split": np.linspace(0.1, 1.0, 10, endpoint=True), #np.arange(1,150,1),
+              "min_samples_leaf": np.linspace(0.1, 0.5, 5, endpoint=True),  #np.arange(1,60,1),
+              "max_leaf_nodes": np.arange(2,60,1),
+              "min_weight_fraction_leaf": np.arange(0.1,0.4, 0.1)}
 
-for score in scores:
-    print("# Tuning hyper-parameters for %s" % score)
-    print()
+from sklearn.preprocessing import LabelBinarizer
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import accuracy_score
 
-    clf = GridSearchCV(SVC(), param_grid, cv=5, verbose=3, scoring='%s_macro' % score)
-    clf.fit(X_train, y_train)
-
-    print("Best parameters set found on development set:")
-    print()
-    print(clf.best_params_)
-    print()
-    print("Grid scores on development set:")
-    print()
-    means = clf.cv_results_['mean_test_score']
-    stds = clf.cv_results_['std_test_score']
-    for mean, std, params in zip(means, stds, clf.cv_results_['params']):
-        print("%0.3f (+/-%0.03f) for %r"
-              % (mean, std * 2, params))
-    print()
-
-    print("Detailed classification report:")
-    print()
-    print("The model is trained on the full development set.")
-    print("The scores are computed on the full evaluation set.")
-    print()
-    y_true, y_pred = y_val, clf.predict(test)
-    print(classification_report(y_true, y_pred))
-    print()
+def multiclass_roc_auc_score(test, pred, average='micro'):
+    lb = LabelBinarizer()
+    lb.fit(test)
+    test = lb.transform(test)
+    pred = lb.transform(pred)
+    return roc_auc_score(test, pred, average=average)
 
 
-""" grid = GridSearchCV(SVC(), param_grid, refit = True, cv=5, verbose = 3)
-# fitting the model for grid search
+#parameter tuning
+from collections import defaultdict
+import warnings
+
+
+def evaluate_param(clf, param_grid, metric, metric_abv):
+    data = []
+    for parameter, values in dict.items(param_grid):
+        for value in values:
+            d = {parameter:value}
+            warnings.filterwarnings('ignore') 
+            clf = RandomForestClassifier(**d)
+            clf.fit(X_train, y_train)
+            x_pred = clf.predict(X_train)
+            train_score = metric(y_train, x_pred)
+            y_pred = clf.predict(X_val)
+            test_score = metric(y_val, y_pred)
+            data.append({'Parameter':parameter, 'Param_value':value, 
+            'Train_'+metric_abv:train_score, 'Test_'+metric_abv:test_score})
+    df = pd.DataFrame(data)
+    _, axes = plt.subplots(nrows=2, ncols=3, figsize=(10,5))
+    for (parameter, group), ax in zip(df.groupby(df.Parameter), axes.flatten()):
+        group.plot(x='Param_value', y=(['Train_'+metric_abv,'Test_'+metric_abv]),
+        kind='line', ax=ax, title=parameter)
+        ax.set_xlabel('')
+    plt.tight_layout()
+    plt.show()
+
+#evaluate_param(clf, param_grid, multiclass_roc_auc_score, 'AUC')
+#evaluate_param(clf, param_grid, accuracy_score, 'ACC')
+
+##TUNE-------------------------------------------------------------------------
+
+param_grid2 = {"n_estimators": [29,47,113,181],
+                #'max_leaf_nodes': [150,None],
+                #'max_depth': [20,None],
+                #'min_samples_split': [2, 5], 
+                #'min_samples_leaf': [1, 2],
+              "max_features": ['auto','sqrt'],
+              "bootstrap": [True, False]
+              }
+
+""" from sklearn.model_selection import GridSearchCV
+grid = GridSearchCV(clf, param_grid2, refit = True, cv=5, verbose = 3)
 grid.fit(X_train, y_train)
 # print best parameter after tuning 
 print('Best parameters: ',grid.best_params_)
@@ -95,5 +241,5 @@ print('Best parameters: ',grid.best_params_)
 print('Best estimator: ',grid.best_estimator_)
 grid_predictions = grid.predict(X_val) 
 
-# print classification report 
+from sklearn.metrics import classification_report
 print(classification_report(y_val, grid_predictions)) """

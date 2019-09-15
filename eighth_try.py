@@ -108,26 +108,9 @@ soil_class = list(set([item for sublist in soil_type for item in sublist]))
 #soil_type_array = (np.array(soil_class)==soil_type[...,None]).any(axis=1)
 #print(soil_type)
 rocky = [s for s in soil_class if "Rock" in s]
-print('rocky: ',rocky)
 stony = [s for s in soil_class if "stony" in s]
-print('stony: ',stony)
 rubbly = [s for s in soil_class if "rubbly" in s]
-print('rubbly: ',rubbly)
 
-a = np.array(['Cathedral family', 'Rock outcrop complex', 'extremely stony'])
-b = np.array(['Legault families complex', 'Ratake families complex', 'Supervisor', 'Rock land', 
-'Bullwark family complex', 'Typic Cryaquolis', 'Rock outcrop', 'Rock land complex', 'Typic Cryaquepts', 
-'Leighcan family complex', 'Cryorthents', 'Cryaquepts complex', 'till substratum', 'rubbly', 
-'Catamount families', 'warm', 'extremely bouldery', 'Wetmore families', 'Leighcan family', 
-'Aquolis complex', 'extremely stony', 'Cryumbrepts complex', 'Ratake family', 'Cryaquolls complex', 
-'Rock outcrop complex', 'Moran family', 'Gothic family', 'Rogert family', 'Legault family complex', 
-'Cryaquolis', 'Cathedral family', 'Legault family', 'Cryoborolis complex', 'Como family', 
-'Limber families complex', 'Pachic Argiborolis', 'Cryorthents complex', 'Troutville family', 
-'Granile', 'Leighcan', 'very stony', 'stony', 'Catamount family', 'Vanet', 'Haploborolis', 
-'Vanet family', 'till substratum complex', 'Typic Cryaquolls complex', 'Cryumbrepts', 
-'Moran families', 'Catamount families complex', 'Gateview family', 'Bullwark', 
-'unspecified in the USFS Soil and ELU Survey', 'Bross family', 'Como', 
-'Cryaquolis complex', 'Borohemists complex', 'Typic Cryaquolls'])
 c = np.array([np.in1d(np.array(soil_class), el) for el in np.array(soil_type)]).astype(int)
 #for el in np.array(soil_type):
 #    print(el, np.where(np.array(soil_class)==el[0]),(np.in1d(np.array(soil_class), el)) )
@@ -137,19 +120,18 @@ scf['stony'] = np.logical_or.reduce(scf[stony], axis=1)
 scf = scf[['rocky','stony','rubbly']]
 
 def transformSoilCols(df):
-    df['Soil_Type'] = np.nan
+    df_s = df.loc[:,'Soil_Type1':'Soil_Type40']
     df = df.loc[:, :'Wilderness_Area4'].join(df.loc[:,'Soil_Type1':'Soil_Type40'] \
-                          .dot(range(1,41)).to_frame('Soil_Type')) \
+                          .dot(range(1,41)).to_frame('Soil_Type1')) \
                           .join(df.loc[:,'Distance_to_hydrology':])
-    df_ = scf.reindex(list(df['Soil_Type'])).reset_index(drop=True)
-    df = pd.concat([df, df_], axis=1)
-    df = df.drop(['Soil_Type'], axis = 1)
+    df_c = scf.reindex(list(df['Soil_Type1'])).reset_index(drop=True)
+    #df = df.drop(['Soil_Type1'], axis = 1)
+    df = pd.concat([df, df_c], axis=1) ##df_s
     return df
 
 X = transformSoilCols(X)
-#test = transformSoilCols(test)
-
-
+print(X.columns)
+test = transformSoilCols(test)
 
 ##SPLIT------------------------------------------------------------------------
 
@@ -212,13 +194,14 @@ def evaluate_param(clf, param_grid, metric, metric_abv):
 
 ##TUNE-------------------------------------------------------------------------
 
-""" param_grid2 = {"n_estimators": [29,47],
-                'max_leaf_nodes': [150,None],
-                'max_depth': [20,None],
-                'min_samples_split': [2, 5], 
-                'min_samples_leaf': [1, 2],
+param_grid2 = {"n_estimators": [29,47,113,181],
+                #'max_leaf_nodes': [150,None],
+                #'max_depth': [20,None],
+                #'min_samples_split': [2, 5], 
+                #'min_samples_leaf': [1, 2],
               "max_features": ['auto','sqrt'],
-              "bootstrap": [True, False]}
+              "bootstrap": [True, False]
+              }
 
 from sklearn.model_selection import GridSearchCV
 grid = GridSearchCV(clf, param_grid2, refit = True, cv=5, verbose = 3)
@@ -230,4 +213,4 @@ print('Best estimator: ',grid.best_estimator_)
 grid_predictions = grid.predict(X_val) 
 
 from sklearn.metrics import classification_report
-print(classification_report(y_val, grid_predictions)) """
+print(classification_report(y_val, grid_predictions))
