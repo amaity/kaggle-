@@ -106,7 +106,7 @@ soil_description = \
 40 Moran family - Cryorthents - Rock land complex, extremely stony.
 """
 import re
-#soil_type = list(filter(None, re.split(r"[,\-\n\d]+", soil_description)) )
+#soil_type = list(filter(None, re.split(r"[,\n\d]+", soil_description)) ) 
 #soil_type = [i.strip() for i in soil_type]
 #soil_type.remove('Rock outcrop complex complex')
 #soil_type = list(set(soil_type))
@@ -129,39 +129,55 @@ rubbly = [s for s in soil_class if "rubbly" in s]
 
 c = np.array([np.in1d(np.array(soil_class), el) for el in np.array(soil_type)]).astype(int)
 #for el in np.array(soil_type):
-#    print(el, np.where(np.array(soil_class)==el[0]),(np.in1d(np.array(soil_class), el)) )
+#print(el, np.where(np.array(soil_class)==el[0]),(np.in1d(np.array(soil_class), el)) )
 scf = pd.DataFrame(data=c, index=range(1,41), columns=soil_class)
 scf['rocky'] = np.logical_or.reduce(scf[rocky], axis=1)
 scf['stony'] = np.logical_or.reduce(scf[stony], axis=1)
 scf = scf[['rocky','stony','rubbly']]
 
-def transformSoilCols(df):
-    df_s = df.loc[:,'Soil_Type1':'Soil_Type40']
-    df = df.loc[:, :'Wilderness_Area4'].join(df.loc[:,'Soil_Type1':'Soil_Type40'] \
-                          .dot(range(1,41)).to_frame('Soil_Type1')) \
-                          .join(df.loc[:,'Distance_to_hydrology':])
+def transformCols(df):
+    #df_s = df.loc[:,'Soil_Type1':'Soil_Type40']
+    df = df.loc[:, :'Horizontal_Distance_To_Fire_Points'] \
+            .join(df.loc[:,'Wilderness_Area1':'Wilderness_Area4'] \
+            .dot(range(1,5)).to_frame('Wilderness_Area1')) \
+            .join(df.loc[:,'Soil_Type1':'Soil_Type40'] \
+            .dot(range(1,41)).to_frame('Soil_Type1')) \
+            .join(df.loc[:,'Distance_to_hydrology':])
     df_c = scf.reindex(list(df['Soil_Type1'])).reset_index(drop=True)
-    df = df.drop(['Soil_Type1'], axis = 1)
-    df = pd.concat([df, df_s, df_c], axis=1) 
+    #df = df.drop(['Soil_Type1'], axis = 1)
+    df = pd.concat([df,  df_c], axis=1) #df_s,
     return df
 
-X = transformSoilCols(X)
+X = transformCols(X)
 print(X.columns)
-test = transformSoilCols(test)
+test = transformCols(test)
 
-{
-    'Gothic family': [Elevation - 2200 to 3200 meters, Slope: 2 to 60 percent],
+def probElevSoil(df):
+    pass
+
+""" {
+    'Cathedral family - Rock outcrop complex, extremely stony': [Slope: ],
+    'Vanet - Ratake families complex, very stony': [Slope: 5 to 40 percent], 
+    'Haploborolis - Rock outcrop complex': [Slope: 5 to 40 percent],
+    'Ratake family - Rock outcrop complex': [Slope: 5 to 40 percent],
+    'Vanet family - Rock outcrop complex': [Slope: 5 to 40 percent],
+    'Vanet - Wetmore families - Rock outcrop complex': [Slope: 5 to 40 percent],
+    'Bullwark - Catamount families - Rock outcrop complex': [Slope: 40 to 150 percent],
+    'Typic Cryaquepts - Typic Cryaquolls complex': [Slope: 0 to 15 percent],
+    'Moran family-Lithic Cryorthents-Leighcan family complex': [Slope: 40 to 75 percent],
+    'Gateview family - Cryaquolis complex': [Slope: 0 to 15 percent],
+    'Gothic family': [Elevation: 2200 to 3200 meters, Slope: 2 to 60 percent],
     'Cathedral family': [Elevation: 1890 to 3000 meters, Slope: 2 to 100 percent],
     'Vanet family': [Elevations: 2370 to 2590 meters, Slope: 20 to 40 percent],
-    'Ratake family': [_, Slope: 2 to 60 percent],
+    'Ratake family': [Elevation: 2286 to 3048 meters, Slope: 2 to 60 percent],
     'Rogert family': [Elevation: 2300 to 3300 meters, Slopes: 3 to 100 percent],
     'Legault family': [Elevation: 2286 to 3474 meters, Slope: 5 to 80 percent],
     'Moran family': [Elevation: 1980 to 3350 meters, Slope: 0 to 70 percent],
     'Bross family': [Elevation: 3048 to 4267 meters, Slope: 2 to 50 percent],
     'Catamount family': [Elevation: 2438 to 3505 meters, Slope: 5 to 70 percent],
-    'Catamount-Bullwark-Rock outcrop complex': 10 to 40 percent slopes,
-
-}
+    'Troutville family': [Elevation: 2438 to 3474 meters, Slope: 2 to 60 percent],
+    'Leighcan family': [Elevation: 2133 to 3657 meters, Slope:0 to 70 percent],
+} """
 
 
 ##SPLIT------------------------------------------------------------------------
@@ -223,7 +239,7 @@ def evaluate_param(clf, param_grid, metric, metric_abv):
 
 ##TUNE-------------------------------------------------------------------------
 
-param_grid2 = {"n_estimators": [29,47,113,181],
+param_grid2 = {"n_estimators": [200,300],
                 #'max_leaf_nodes': [150,None],
                 #'max_depth': [20,None],
                 #'min_samples_split': [2, 5], 
@@ -232,7 +248,7 @@ param_grid2 = {"n_estimators": [29,47,113,181],
               "bootstrap": [True, False]
               }
 
-""" from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import GridSearchCV
 grid = GridSearchCV(clf, param_grid2, refit = True, cv=5, verbose = 3)
 grid.fit(X_train, y_train)
 # print best parameter after tuning 
@@ -242,4 +258,4 @@ print('Best estimator: ',grid.best_estimator_)
 grid_predictions = grid.predict(X_val) 
 
 from sklearn.metrics import classification_report
-print(classification_report(y_val, grid_predictions)) """
+print(classification_report(y_val, grid_predictions))
