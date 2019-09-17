@@ -15,6 +15,7 @@ test = test.drop(['Id'], axis = 1)
 
 #prepare data for training the model
 X = train.drop(['Cover_Type'], axis = 1)
+print(X.columns[(X < 0).any()])
 
 ##FEATURE_IMPORTANCES----------------------------------------------------------
 
@@ -28,6 +29,7 @@ sns.set(style="whitegrid")
 
 features = pd.DataFrame({'Features': X.columns, 
                          'Importances': clf.feature_importances_})
+plt.figure(figsize=(12,4))
 sns.barplot(x='Features', y='Importances', data=features)
 plt.xticks(rotation='vertical')
 #plt.show()
@@ -158,7 +160,7 @@ families = ['Como family', 'Troutville family', 'Bullwark family complex',
 'Rogert family', 'Leighcan family', 'Vanet family', 'Moran family', 
 'Cathedral family', 'Bross family', 'Gothic family', 'Ratake family', 
 'Gateview family', 'Legault family', 'Leighcan family complex', 'Catamount family']
-family_range = [(2000, 2750), #Como
+elev_range =   [(2000, 2750), #Como
                 (2438, 3474), #Troutville
                 (2286, 3048), #Bullwark
                 (2300, 3300), #Rogert
@@ -177,9 +179,15 @@ family_range = [(2000, 2750), #Como
 
 def probElevSoil(df):
     df_ = scf[families].reindex(list(df['Soil_Type1'])).reset_index(drop=True)
-    df['Elevation'].between
-    pass
+    print(df_.shape)
+    df['Prob_elev_soil'] = df_.dot(map(df['Elevation'].between, elev_range) )
+    return df
 
+a = pd.DataFrame([{i:X['Elevation'].between(j[0], j[1])} for (i,j) in zip(families,elev_range)])
+a.fillna(False,inplace=True)
+a['Prob'] =a.sum(1)
+print(a['Prob'].head())
+ 
 """ {
     'Cathedral family - Rock outcrop complex, extremely stony': [Slope: ],
     'Vanet - Ratake families complex, very stony': [Slope: 5 to 40 percent], 
