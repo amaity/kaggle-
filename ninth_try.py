@@ -30,7 +30,7 @@ features = pd.DataFrame({'Features': X.columns,
                          'Importances': clf.feature_importances_})
 sns.barplot(x='Features', y='Importances', data=features)
 plt.xticks(rotation='vertical')
-plt.show()
+#plt.show()
 
 ##PREPROCESS-------------------------------------------------------------------
 
@@ -104,7 +104,7 @@ soil_description = \
 38 Leighcan - Moran families - Cryaquolls complex, extremely stony.
 39 Moran family - Cryorthents - Leighcan family complex, extremely stony.
 40 Moran family - Cryorthents - Rock land complex, extremely stony.
-"""
+""" 
 import re
 #soil_type = list(filter(None, re.split(r"[,\n\d]+", soil_description)) ) 
 #soil_type = [i.strip() for i in soil_type]
@@ -133,7 +133,9 @@ c = np.array([np.in1d(np.array(soil_class), el) for el in np.array(soil_type)]).
 scf = pd.DataFrame(data=c, index=range(1,41), columns=soil_class)
 scf['rocky'] = np.logical_or.reduce(scf[rocky], axis=1)
 scf['stony'] = np.logical_or.reduce(scf[stony], axis=1)
-scf = scf[['rocky','stony','rubbly']]
+#scf = scf[['rocky','stony','rubbly']]
+family_cols = [col for col in scf.columns if 'family' in col]
+print(family_cols)
 
 def transformCols(df):
     #df_s = df.loc[:,'Soil_Type1':'Soil_Type40']
@@ -149,10 +151,33 @@ def transformCols(df):
     return df
 
 X = transformCols(X)
-print(X.columns)
+#print(X.columns)
 test = transformCols(test)
 
+families = ['Como family', 'Troutville family', 'Bullwark family complex', 
+'Rogert family', 'Leighcan family', 'Vanet family', 'Moran family', 
+'Cathedral family', 'Bross family', 'Gothic family', 'Ratake family', 
+'Gateview family', 'Legault family', 'Leighcan family complex', 'Catamount family']
+family_range = [(2000, 2750), #Como
+                (2438, 3474), #Troutville
+                (2286, 3048), #Bullwark
+                (2300, 3300), #Rogert
+                (2133, 3657), #Leighcan
+                (2370, 2590), #Vanet
+                (1980, 3350), #Moran
+                (1890, 3000), #Cathedral
+                (3048, 4267), #Bross
+                (2200, 3200), #Gothic
+                (2286, 3048), #Ratake
+                (2316, 3048), #Gateview
+                (2286, 3474), #Legault
+                (2133, 3657), #Leighcan
+                (2438, 3505)  #Catamount
+                ]
+
 def probElevSoil(df):
+    df_ = scf[families].reindex(list(df['Soil_Type1'])).reset_index(drop=True)
+    df['Elevation'].between
     pass
 
 """ {
@@ -177,6 +202,10 @@ def probElevSoil(df):
     'Catamount family': [Elevation: 2438 to 3505 meters, Slope: 5 to 70 percent],
     'Troutville family': [Elevation: 2438 to 3474 meters, Slope: 2 to 60 percent],
     'Leighcan family': [Elevation: 2133 to 3657 meters, Slope:0 to 70 percent],
+    'Bullwark family': [Elevation: 2286 to 3048 meters, Slope: 5 to 50 percent],
+    'Bross family': [Elevation: 3048 to 4267 meters, Slope: 2 to 50 percent],
+    'Como family': [Elevation: 2000 to 2750 meters, Slope: 10 to 60 percent],
+    'Gateview family': [Elevation: 2316 to 3048 meters, Slope: 2 to 45 percent]
 } """
 
 
@@ -248,7 +277,7 @@ param_grid2 = {"n_estimators": [200,300],
               "bootstrap": [True, False]
               }
 
-from sklearn.model_selection import GridSearchCV
+""" from sklearn.model_selection import GridSearchCV
 grid = GridSearchCV(clf, param_grid2, refit = True, cv=5, verbose = 3)
 grid.fit(X_train, y_train)
 # print best parameter after tuning 
@@ -258,4 +287,4 @@ print('Best estimator: ',grid.best_estimator_)
 grid_predictions = grid.predict(X_val) 
 
 from sklearn.metrics import classification_report
-print(classification_report(y_val, grid_predictions))
+print(classification_report(y_val, grid_predictions)) """
