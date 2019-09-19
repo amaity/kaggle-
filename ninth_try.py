@@ -57,11 +57,17 @@ def addDistFeatures(df):
 X = addDistFeatures(X)
 test = addDistFeatures(test)
 
-#persisting with the idea of adding simple combination of Hillshades
+#adding Hillshade
 cols = ['Hillshade_9am', 'Hillshade_Noon', 'Hillshade_3pm']
-weights = pd.Series([0.299, 0.587, 0.114], index=cols)
-X['Hillshade'] = (X[cols]*weights).sum(1)
-test['Hillshade'] = (test[cols]*weights).sum(1)
+#weights = pd.Series([0.299, 0.587, 0.114], index=cols)
+X['Hillshade'] = X[cols].sum(1)
+test['Hillshade'] = test[cols].sum(1)
+
+#aspect/slope
+#radiation is proportional to [cos(zenith)*cos(slope)+sin(zenith)*sin(slope)*cos(azimuth-aspect)]
+#co-ordinates: 40°42′32″N 105°34′52″W
+#https://www.esrl.noaa.gov/gmd/grad/solcalc/azel.html
+X['Radiation'] = 0.4248*np.cos(X['Slope']) + 0.9053*np.sin(X['Slope'])*np.cos(248.29-X['Aspect'])
 
 #trying a feature set based on soil description
 
@@ -152,9 +158,9 @@ def transformCols(df):
     df = pd.concat([df,  df_c], axis=1) #df_s,
     return df
 
-X = transformCols(X)
+#X = transformCols(X)
 #print(X.columns)
-test = transformCols(test)
+#test = transformCols(test)
 
 families = ['Como family', 'Troutville family', 'Bullwark family complex', 
 'Rogert family', 'Leighcan family', 'Vanet family', 'Moran family', 
@@ -177,16 +183,6 @@ elev_range =   [(2000, 2750), #Como
                 (2438, 3505)  #Catamount
                 ]
 
-def probElevSoil(df):
-    df_ = scf[families].reindex(list(df['Soil_Type1'])).reset_index(drop=True)
-    print(df_.shape)
-    df['Prob_elev_soil'] = df_.dot(map(df['Elevation'].between, elev_range) )
-    return df
-
-a = pd.DataFrame([{i:X['Elevation'].between(j[0], j[1])} for (i,j) in zip(families,elev_range)])
-a.fillna(False,inplace=True)
-a['Prob'] =a.sum(1)
-print(a['Prob'].head())
  
 """ {
     'Cathedral family - Rock outcrop complex, extremely stony': [Slope: ],
@@ -276,7 +272,7 @@ def evaluate_param(clf, param_grid, metric, metric_abv):
 
 ##TUNE-------------------------------------------------------------------------
 
-param_grid2 = {"n_estimators": [200,300],
+param_grid2 = {"n_estimators": [29,47,113,181],
                 #'max_leaf_nodes': [150,None],
                 #'max_depth': [20,None],
                 #'min_samples_split': [2, 5], 
@@ -285,7 +281,7 @@ param_grid2 = {"n_estimators": [200,300],
               "bootstrap": [True, False]
               }
 
-""" from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import GridSearchCV
 grid = GridSearchCV(clf, param_grid2, refit = True, cv=5, verbose = 3)
 grid.fit(X_train, y_train)
 # print best parameter after tuning 
@@ -295,4 +291,4 @@ print('Best estimator: ',grid.best_estimator_)
 grid_predictions = grid.predict(X_val) 
 
 from sklearn.metrics import classification_report
-print(classification_report(y_val, grid_predictions)) """
+print(classification_report(y_val, grid_predictions))
