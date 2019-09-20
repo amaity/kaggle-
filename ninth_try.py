@@ -69,6 +69,11 @@ test['Hillshade'] = test[cols].sum(1)
 #https://www.esrl.noaa.gov/gmd/grad/solcalc/azel.html
 X['Radiation'] = 0.4248*np.cos(X['Slope']) + 0.9053*np.sin(X['Slope'])*np.cos(248.29-X['Aspect'])
 
+#elevation
+{'Spruce/Fir':(3000,3500), 'Lodgepole Pine':(0,3400), 'Ponderosa Pine':(0,3000), 
+  'Cottonwood/Willow':(1500,2500), 'Aspen':(1500,3600), 
+  'Douglas-fir':(500,3000), 'Krummholz':(1200,inf)}
+
 #trying a feature set based on soil description
 
 soil_description = \
@@ -154,8 +159,9 @@ def transformCols(df):
             .dot(range(1,41)).to_frame('Soil_Type1')) \
             .join(df.loc[:,'Distance_to_hydrology':])
     df_c = scf.reindex(list(df['Soil_Type1'])).reset_index(drop=True)
-    #df = df.drop(['Soil_Type1'], axis = 1)
-    df = pd.concat([df,  df_c], axis=1) #df_s,
+    df[['Wilderness_Area1','Soil_Type1']] = df[['Wilderness_Area1',
+                                             'Soil_Type1']].astype('category')
+    #df = pd.concat([df,  df_c], axis=1) #df_s,
     return df
 
 #X = transformCols(X)
@@ -272,7 +278,7 @@ def evaluate_param(clf, param_grid, metric, metric_abv):
 
 ##TUNE-------------------------------------------------------------------------
 
-param_grid2 = {"n_estimators": [29,47,113,181],
+param_grid2 = {"n_estimators": [100,200],
                 #'max_leaf_nodes': [150,None],
                 #'max_depth': [20,None],
                 #'min_samples_split': [2, 5], 
