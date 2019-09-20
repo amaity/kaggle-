@@ -60,22 +60,31 @@ test = addDistFeatures(test)
 #adding Hillshade
 cols = ['Hillshade_9am', 'Hillshade_Noon', 'Hillshade_3pm']
 #weights = pd.Series([0.299, 0.587, 0.114], index=cols)
-X['Hillshade'] = X[cols].sum(1)
-test['Hillshade'] = test[cols].sum(1)
+X['Hillshade_Sum'] = X[cols].sum(1)
+test['Hillshade_Sum'] = test[cols].sum(1)
 
-#aspect/slope
+#applying vague connections to slope
 #radiation is proportional to [cos(zenith)*cos(slope)+sin(zenith)*sin(slope)*cos(azimuth-aspect)]
 #co-ordinates: 40°42′32″N 105°34′52″W
 #https://www.esrl.noaa.gov/gmd/grad/solcalc/azel.html
-X['Radiation'] = 0.4248*np.cos(X['Slope']) + 0.9053*np.sin(X['Slope'])*np.cos(248.29-X['Aspect'])
+X['Cosine_of_slope'] = np.cos(X['Slope']) 
+X['Sine_of_slope'] = np.sin(X['Slope'])
 
-#elevation
-{'Spruce/Fir':(3000,3500), 'Lodgepole Pine':(0,3400), 'Ponderosa Pine':(0,3000), 
-  'Cottonwood/Willow':(1500,2500), 'Aspen':(1500,3600), 
-  'Douglas-fir':(500,3000), 'Krummholz':(1200,inf)}
+#classifying elevation
+#X['Prob_Spruce'] = (X['Elevation'].isin(range(2500,3700))).astype(int)
+#X['Prob_Lodgepole'] = (X['Elevation'].isin(range(0,3500))).astype(int)
+#X['Prob_Ponderosa'] = (X['Elevation'].isin(range(0,3000))).astype(int)
+#X['Prob_Cottonwood'] = (X['Elevation'].isin(range(1500,2600))).astype(int)
+#X['Prob_Aspen'] = (X['Elevation'].isin(range(1500,3600))).astype(int)
+#X['Prob_Douglas'] = (X['Elevation'].isin(range(500,3000))).astype(int)
+#X['Krummholz'] = (X['Elevation'].isin(range(2800,4000))).astype(int)
+#cols = ['Prob_Spruce','Prob_Lodgepole','Prob_Ponderosa','Prob_Cottonwood','Prob_Aspen','Prob_Douglas','Krummholz']
+#print(X[cols].head())
+df_ = pd.concat([X['Elevation'],y],axis=1)
+print(df_.groupby('Cover_Type').agg({'Elevation':['min','max']}) )
+X['Log_Elevation'] = np.log(X['Elevation'])
 
 #trying a feature set based on soil description
-
 soil_description = \
 """1 Cathedral family - Rock outcrop complex, extremely stony.
 2 Vanet - Ratake families complex, very stony.
@@ -147,8 +156,10 @@ scf = pd.DataFrame(data=c, index=range(1,41), columns=soil_class)
 scf['rocky'] = np.logical_or.reduce(scf[rocky], axis=1)
 scf['stony'] = np.logical_or.reduce(scf[stony], axis=1)
 #scf = scf[['rocky','stony','rubbly']]
+stone_cols = ['rocky','stony','rubbly']
 family_cols = [col for col in scf.columns if 'family' in col]
 print(family_cols)
+scf = scf[stone_cols + family_cols]
 
 def transformCols(df):
     #df_s = df.loc[:,'Soil_Type1':'Soil_Type40']
@@ -159,13 +170,12 @@ def transformCols(df):
             .dot(range(1,41)).to_frame('Soil_Type1')) \
             .join(df.loc[:,'Distance_to_hydrology':])
     df_c = scf.reindex(list(df['Soil_Type1'])).reset_index(drop=True)
-    df[['Wilderness_Area1','Soil_Type1']] = df[['Wilderness_Area1',
-                                             'Soil_Type1']].astype('category')
-    #df = pd.concat([df,  df_c], axis=1) #df_s,
+    #df[['Wilderness_Area1','Soil_Type1']] = df[['Wilderness_Area1','Soil_Type1']].astype('category')
+    df = pd.concat([df,  df_c], axis=1) #df_s,
     return df
 
 #X = transformCols(X)
-#print(X.columns)
+print(X.columns)
 #test = transformCols(test)
 
 families = ['Como family', 'Troutville family', 'Bullwark family complex', 
@@ -278,7 +288,7 @@ def evaluate_param(clf, param_grid, metric, metric_abv):
 
 ##TUNE-------------------------------------------------------------------------
 
-param_grid2 = {"n_estimators": [100,200],
+param_grid2 = {"n_estimators": [200,300],
                 #'max_leaf_nodes': [150,None],
                 #'max_depth': [20,None],
                 #'min_samples_split': [2, 5], 
@@ -298,3 +308,5 @@ grid_predictions = grid.predict(X_val)
 
 from sklearn.metrics import classification_report
 print(classification_report(y_val, grid_predictions))
+
+#http://ataspinar.com/2017/05/26/classification-with-scikit-learn/
