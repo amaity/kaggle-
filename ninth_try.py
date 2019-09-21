@@ -60,15 +60,15 @@ test = addDistFeatures(test)
 #adding Hillshade
 cols = ['Hillshade_9am', 'Hillshade_Noon', 'Hillshade_3pm']
 #weights = pd.Series([0.299, 0.587, 0.114], index=cols)
-X['Hillshade_Sum'] = X[cols].sum(1)
-test['Hillshade_Sum'] = test[cols].sum(1)
+#X['Hillshade_Sum'] = X[cols].sum(1)
+#test['Hillshade_Sum'] = test[cols].sum(1)
 
 #applying vague connections to slope
 #radiation is proportional to [cos(zenith)*cos(slope)+sin(zenith)*sin(slope)*cos(azimuth-aspect)]
 #co-ordinates: 40°42′32″N 105°34′52″W
 #https://www.esrl.noaa.gov/gmd/grad/solcalc/azel.html
-X['Cosine_of_slope'] = np.cos(X['Slope']) 
-X['Sine_of_slope'] = np.sin(X['Slope'])
+#X['Cosine_of_slope'] = np.cos(X['Slope']) 
+#X['Sine_of_slope'] = np.sin(X['Slope'])
 
 #classifying elevation
 #X['Prob_Spruce'] = (X['Elevation'].isin(range(2500,3700))).astype(int)
@@ -82,7 +82,7 @@ X['Sine_of_slope'] = np.sin(X['Slope'])
 #print(X[cols].head())
 df_ = pd.concat([X['Elevation'],y],axis=1)
 print(df_.groupby('Cover_Type').agg({'Elevation':['min','max']}) )
-X['Log_Elevation'] = np.log(X['Elevation'])
+#X['Log_Elevation'] = np.log(X['Elevation'])
 
 #trying a feature set based on soil description
 soil_description = \
@@ -297,7 +297,7 @@ param_grid2 = {"n_estimators": [200,300],
               "bootstrap": [True, False]
               }
 
-from sklearn.model_selection import GridSearchCV
+""" from sklearn.model_selection import GridSearchCV
 grid = GridSearchCV(clf, param_grid2, refit = True, cv=5, verbose = 3)
 grid.fit(X_train, y_train)
 # print best parameter after tuning 
@@ -307,6 +307,62 @@ print('Best estimator: ',grid.best_estimator_)
 grid_predictions = grid.predict(X_val) 
 
 from sklearn.metrics import classification_report
-print(classification_report(y_val, grid_predictions))
+print(classification_report(y_val, grid_predictions)) """
 
 #http://ataspinar.com/2017/05/26/classification-with-scikit-learn/
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn import tree
+from sklearn.neural_network import MLPClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.gaussian_process.kernels import RBF
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.naive_bayes import GaussianNB
+import time
+
+clf_dict = {
+    "Logistic Regression": LogisticRegression(),
+    "Nearest Neighbors": KNeighborsClassifier(),
+    "Linear SVM": SVC(),
+    "Gradient Boosting Classifier": GradientBoostingClassifier(n_estimators=100),
+    "Decision Tree": tree.DecisionTreeClassifier(),
+    "Random Forest": RandomForestClassifier(n_estimators=100),
+    "Neural Net": MLPClassifier(alpha = 1),
+    "Naive Bayes": GaussianNB(),
+}
+
+def batch_classify(X_train, y_train, X_val, y_val, no_clf = 5, verbose = True):
+    dict_models = {}
+    for clf_name, clf in list(clf_dict.items())[:no_clf]:
+        t_start = time.clock()
+        clf.fit(X_train, y_train)
+        t_end = time.clock()
+        
+        t_diff = t_end - t_start
+        train_score = clf.score(X_train, y_train)
+        val_score = clf.score(X_val, y_val)
+        
+        dict_models[clf_name] = {'model': clf, 'train_score': train_score, 'val_score': val_score, 'train_time': t_diff}
+        if verbose:
+            print("trained {c} in {f:.2f} s".format(c=clf_name, f=t_diff))
+    return dict_models
+
+def display_dict_models(dict_models, sort_by='val_score'):
+    cls = [key for key in dict_models.keys()]
+    test_s = [dict_models[key]['val_score'] for key in cls]
+    training_s = [dict_models[key]['train_score'] for key in cls]
+    training_t = [dict_models[key]['train_time'] for key in cls]
+    
+    df_ = pd.DataFrame(data=np.zeros(shape=(len(cls),4)), columns = ['classifier', 'train_score', 'val_score', 'train_time'])
+    for ii in range(0,len(cls)):
+        df_.loc[ii, 'classifier'] = cls[ii]
+        df_.loc[ii, 'train_score'] = training_s[ii]
+        df_.loc[ii, 'val_score'] = test_s[ii]
+        df_.loc[ii, 'train_time'] = training_t[ii]
+    
+    print(df_.sort_values(by=sort_by, ascending=False))
+
+dict_models = batch_classify(X_train, y_train, X_val, y_val, no_clf = 8)
+display_dict_models(dict_models)
