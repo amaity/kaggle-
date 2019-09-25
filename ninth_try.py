@@ -167,11 +167,10 @@ def display_dict_models(dict_models, sort_by='val_score'):
 dict_models = batch_classify(X_train, y_train, X_val, y_val, no_clf = 8)
 display_dict_models(dict_models)
 
-""" #code from here: https://www.dataquest.io/blog/introduction-to-ensembles/
+#code from here: https://www.dataquest.io/blog/introduction-to-ensembles/
 SEED = 13
 
 def get_models():
-    """Generate a library of base learners."""
     nb = GaussianNB()
     svc = SVC(C=100, probability=True)
     knn = KNeighborsClassifier(n_neighbors=3)
@@ -192,7 +191,6 @@ def get_models():
     return models
 
 def train_predict(model_list):
-    """Fit models in list on training set and return preds"""
     P = np.zeros((y_val.shape[0], len(model_list)))
     P = pd.DataFrame(P)
 
@@ -210,7 +208,6 @@ def train_predict(model_list):
     return P
 
 def score_models(P, y):
-    """Score model in prediction DF"""
     print("Scoring models.")
     for m in P.columns:
         score = accuracy_score(y, P.loc[:, m])
@@ -223,7 +220,7 @@ score_models(P, y_val)
 
 base_learners = get_models()
 meta_learner = GradientBoostingClassifier(
-    n_estimators=1000,
+    n_estimators=100,
     max_features=4,
     max_depth=3,
     subsample=0.5,
@@ -234,9 +231,6 @@ xtrain_base, xval_base, ytrain_base, yval_base = train_test_split(
     X, y, test_size=0.5, stratify=y, random_state=SEED)
 
 def train_base_learners(base_learners, inp, out, verbose=True):
-    """
-    Train all base learners in the library.
-    """
     if verbose: print("Fitting models.")
     for _, (name, m) in enumerate(base_learners.items()):
         if verbose: print("%s..." % name, end=" ", flush=False)
@@ -246,9 +240,6 @@ def train_base_learners(base_learners, inp, out, verbose=True):
 train_base_learners(base_learners, xtrain_base, ytrain_base)
 
 def predict_base_learners(pred_base_learners, inp, verbose=True):
-    """
-    Generate a prediction matrix.
-    """
     P = np.zeros((inp.shape[0], len(pred_base_learners)))
 
     if verbose: print("Generating base learner predictions.")
@@ -265,16 +256,15 @@ P_base = predict_base_learners(base_learners, xval_base)
 meta_learner.fit(P_base, yval_base)
 
 def ensemble_predict(base_learners, meta_learner, inp, verbose=True):
-    """
-    Generate predictions from the ensemble.
-    """
     P_pred = predict_base_learners(base_learners, inp, verbose=verbose)
     return P_pred, meta_learner.predict(P_pred)
 
 P_pred, p = ensemble_predict(base_learners, meta_learner, X_val)
 print("\nAccuracy score: %.3f" % accuracy_score(y_val, p))
 
-#https://www.mikulskibartosz.name/fill-missing-values-using-random-forest/ """
+#https://www.mikulskibartosz.name/fill-missing-values-using-random-forest/
 
 #https://www.analyticsvidhya.com/blog/2018/06/comprehensive-guide-for-ensemble-models/
 #https://dkopczyk.quantee.co.uk/stacking/
+#http://blog.keyrus.co.uk/ensembling_ml_models.html
+
