@@ -52,7 +52,7 @@ clf.fit(X_train, y_train)
 y_pred = clf.predict(X_val)
 accuracy_score(y_val, y_pred)
 
-#PREPROCESS
+#PREPROCESS-------------------------------------------------------------------
 
 cols = ['Horizontal_Distance_To_Hydrology', 'Vertical_Distance_To_Hydrology']
 X['Distance_to_hydrology'] = X[cols].apply(np.linalg.norm, axis=1)
@@ -83,7 +83,8 @@ X['Cosine_of_slope'] = np.cos(np.radians(X['Slope']) )
 X['Elevation_VDH'] = X['Elevation'] - X['Vertical_Distance_To_Hydrology']
 
 print(X.columns)
-
+#print(X.loc[(X==0).any(axis=1)].columns)
+#------------------------------------------------------------------------------
 # Plotting mode frequencies as % of data size
 #take from: https://www.kaggle.com/kwabenantim/forest-cover-feature-engineering
 n_rows = X.shape[0]
@@ -166,7 +167,7 @@ def display_dict_models(dict_models, sort_by='val_score'):
 dict_models = batch_classify(X_train, y_train, X_val, y_val, no_clf = 8)
 display_dict_models(dict_models)
 
-#code from here: https://www.dataquest.io/blog/introduction-to-ensembles/
+""" #code from here: https://www.dataquest.io/blog/introduction-to-ensembles/
 SEED = 13
 
 def get_models():
@@ -273,4 +274,7 @@ def ensemble_predict(base_learners, meta_learner, inp, verbose=True):
 P_pred, p = ensemble_predict(base_learners, meta_learner, X_val)
 print("\nAccuracy score: %.3f" % accuracy_score(y_val, p))
 
-#https://www.mikulskibartosz.name/fill-missing-values-using-random-forest/
+#https://www.mikulskibartosz.name/fill-missing-values-using-random-forest/ """
+
+#https://www.analyticsvidhya.com/blog/2018/06/comprehensive-guide-for-ensemble-models/
+#https://dkopczyk.quantee.co.uk/stacking/
