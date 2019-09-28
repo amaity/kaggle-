@@ -268,3 +268,45 @@ print("\nAccuracy score: %.3f" % accuracy_score(y_val, p))
 #https://dkopczyk.quantee.co.uk/stacking/
 #http://blog.keyrus.co.uk/ensembling_ml_models.html
 
+from sklearn.base import clone
+
+def stacking(base_learners, meta_learner, X, y, foldgenerator):
+    # Train final base learners for test time
+    print("Fitting final base learners...", end="")
+    train_base_learners(base_learners, X, y, verbose=False)
+    print("done")
+
+    # Generate predictions for training meta learners
+    # Outer loop:
+    print("Generating cross-validated predictions...")
+    cv_preds, cv_y = [], []
+    for i, (train_idx, test_idx) in enumerate(foldgenerator.split(X)):
+
+        fold_xtrain, fold_ytrain = X[train_idx, :], y[train_idx]
+        fold_xtest, fold_ytest = X[test_idx, :], y[test_idx]
+
+        # Inner loop: step 4 and 5
+        fold_base_learners = {name: clone(model)
+                              for name, model in base_learners.items()}
+        train_base_learners(
+            fold_base_learners, fold_xtrain, fold_ytrain, verbose=False)
+
+        fold_P_base = predict_base_learners(
+            fold_base_learners, fold_xtest, verbose=False)
+
+        cv_preds.append(fold_P_base)
+        cv_y.append(fold_ytest)
+        print("Fold %i done" % (i + 1))
+
+    print("CV-predictions done")
+
+    # Be careful to get rows in the right order
+    cv_preds = np.vstack(cv_preds)
+    cv_y = np.hstack(cv_y)
+
+    # Train meta learner
+    print("Fitting meta learner...", end="")
+    meta_learner.fit(cv_preds, cv_y)
+    print("done")
+
+    return base_learners, meta_learner
