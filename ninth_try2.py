@@ -15,7 +15,7 @@ from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.ensemble import GradientBoostingClassifier, AdaBoostClassifier
 from sklearn.gaussian_process.kernels import RBF
 from sklearn.naive_bayes import GaussianNB
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
@@ -106,38 +106,24 @@ def drop_unimportant(df):
     return df_
 
 X = drop_unimportant(X)
-
-#X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.3)
-#clf.fit(X_train, y_train)
-#y_pred = clf.predict(X_val)
-#print('Acc score after preprocessing: ',accuracy_score(y_val, y_pred))
-#print('-'*20)
-
-
-def evaluate_param(clf, param_grid, metric, metric_abv):
-    data = []
-    for parameter, values in dict.items(param_grid):
-        for value in values:
-            d = {parameter:value}
-            warnings.filterwarnings('ignore') 
-            clf = RandomForestClassifier(**d)
-            clf.fit(X_train, y_train)
-            x_pred = clf.predict(X_train)
-            train_score = metric(y_train, x_pred)
-            y_pred = clf.predict(X_val)
-            test_score = metric(y_val, y_pred)
-            data.append({'Parameter':parameter, 'Param_value':value, 
-            'Train_'+metric_abv:train_score, 'Test_'+metric_abv:test_score})
-    df = pd.DataFrame(data)
-    _, axes = plt.subplots(nrows=2, ncols=3, figsize=(10,5))
-    for (parameter, group), ax in zip(df.groupby(df.Parameter), axes.flatten()):
-        group.plot(x='Param_value', y=(['Train_'+metric_abv,'Test_'+metric_abv]),
-        kind='line', ax=ax, title=parameter)
-        ax.set_xlabel('')
-    plt.tight_layout()
-    plt.show()
+#------------------------------------------------------------------------------
 
 X_train, X_val, y_train, y_val = train_test_split(X, y, stratify=y, test_size=0.3)
+
+""" param_grid2 = {"n_estimators": [29,47,113,181],
+                #'max_leaf_nodes': [150,None],
+                #'max_depth': [20,None],
+                #'min_samples_split': [2, 5],
+                #'min_samples_leaf': [1, 2],
+              "max_features": ['auto','sqrt'],
+              "bootstrap": [True, False]}
+
+grid = GridSearchCV(clf, param_grid2, refit=True, cv=5, verbose=0)
+grid.fit(X_train, y_train)
+print('Best parameters: ',grid.best_params_)
+print('Best estimator: ',grid.best_estimator_)
+grid_predictions = grid.predict(X_val) 
+print(classification_report(y_val, grid_predictions)) """
 
 """ params = {'n_neighbors': [2, 3, 4, 5, 6, 7, 8, 9, 10],
           'p': [1,2,3,4,5]}
@@ -162,28 +148,37 @@ print('-'*20) """
 
 from mlxtend.classifier import StackingCVClassifier
 
-clf = RandomForestClassifier(n_estimators=100, bootstrap=False, random_state=SEED)
+clf = RandomForestClassifier(n_estimators=181, bootstrap=False, 
+                               max_features='auto', random_state=SEED)
+print(clf.get_params)
 clf1 = KNeighborsClassifier(n_neighbors=1, p=1)
 clf2 = GaussianNB()
 clf3 = DecisionTreeClassifier(max_features='auto', random_state=SEED)
 clf4 = LinearDiscriminantAnalysis()
-lr = LogisticRegression(C=1, random_state=SEED)
+clf5 = AdaBoostClassifier(base_estimator=clf3, n_estimators=100)
+lr = LogisticRegression(multi_class='multinomial', solver='newton-cg',random_state=SEED)
 
 
-sclf = StackingCVClassifier(classifiers=[clf, clf1, clf2, clf3],
+sclf = StackingCVClassifier(classifiers=[clf, clf5],
                                          meta_classifier=lr)
 print('-'*20)
-print('3-fold cross validation:\n')
+print('5-fold cross validation:\n')
 
-for clf, label in zip([clf, clf1, clf2, clf3, sclf], 
+for clf, label in zip([clf, clf5, sclf], 
                       ['Random Forest', 
-                       'KNN', 
-                       'Naive Bayes',
-                       'Decision Tree',
+                       #'KNN', 
+                       #'Naive Bayes',
+                       #'Decision Tree',
                        #'Linear Disc',
+                       'Adaboost',
                        'StackingClassifier']):
 
-    scores = cross_val_score(clf, X.values, y.values, cv=3, scoring='accuracy')
+    scores = cross_val_score(clf, X.values, y.values, cv=5, scoring='accuracy')
     print("Accuracy: %0.2f (+/- %0.2f) [%s]" 
           % (scores.mean(), scores.std(), label))
 print('-'*20)
+
+abc = AdaBoostClassifier(base_estimator=clf3)
+model = abc.fit(X_train, y_train)
+y_pred = model.predict(X_val)
+print("Adaboost Accuracy: ",accuracy_score(y_val, y_pred))
