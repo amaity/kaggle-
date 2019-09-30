@@ -43,13 +43,16 @@ print(X.columns[(X < 0).any()])
 clf = RandomForestClassifier(random_state=SEED)
 clf = clf.fit(X,y)
 
-features = pd.DataFrame({'Features': X.columns, 
+def plotImpFeatures(X):
+    features = pd.DataFrame({'Features': X.columns, 
                          'Importances': clf.feature_importances_})
-features.sort_values(by=['Importances'], axis='index', ascending=False, inplace=True)
-plt.figure(figsize=(12,4))
-sns.barplot(x='Features', y='Importances', data=features)
-plt.xticks(rotation='vertical')
-#plt.show()
+    features.sort_values(by=['Importances'], axis='index', ascending=False, inplace=True)
+    plt.figure(figsize=(12,4))
+    sns.barplot(x='Features', y='Importances', data=features)
+    plt.xticks(rotation='vertical')
+    plt.show()
+
+#plotImpFeatures(X)
 
 X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.3)
 clf.fit(X_train, y_train)
@@ -110,7 +113,8 @@ X = drop_unimportant(X)
 
 X_train, X_val, y_train, y_val = train_test_split(X, y, stratify=y, test_size=0.3)
 
-""" param_grid2 = {"n_estimators": [29,47,113,181],
+#------------------------------------------------------------------------------
+param_grid2 = {"n_estimators": [29,47,113,181],
                 #'max_leaf_nodes': [150,None],
                 #'max_depth': [20,None],
                 #'min_samples_split': [2, 5],
@@ -118,13 +122,40 @@ X_train, X_val, y_train, y_val = train_test_split(X, y, stratify=y, test_size=0.
               "max_features": ['auto','sqrt'],
               "bootstrap": [True, False]}
 
-grid = GridSearchCV(clf, param_grid2, refit=True, cv=5, verbose=0)
-grid.fit(X_train, y_train)
-print('Best parameters: ',grid.best_params_)
-print('Best estimator: ',grid.best_estimator_)
-grid_predictions = grid.predict(X_val) 
-print(classification_report(y_val, grid_predictions)) """
+def grid_search(clf, params, xtrain, ytrain, yval, cv=5):
+    grid = GridSearchCV(clf, param_grid2, refit=True, cv=cv, verbose=0)
+    grid.fit(X_train, y_train)
+    print('Best parameters: ',grid.best_params_)
+    print('Best estimator: ',grid.best_estimator_)
+    grid_predictions = grid.predict(X_val) 
+    print(classification_report(y_val, grid_predictions))
 
+#grid_search(clf, param_grid2, X_train, y_train, y_val)
+#------------------------------------------------------------------------------
+
+neighbors = list(range(1, 50, 2))
+
+def tuning_knn(params, xtrain, ytrain, cv):
+    # empty list that will hold cv scores
+    cv_scores = []
+    # perform 10-fold cross validation
+    for k in neighbors:
+        knn = KNeighborsClassifier(n_neighbors=k)
+        scores = cross_val_score(knn, X_train, y_train, cv=10, scoring='accuracy')
+        cv_scores.append(scores.mean())
+
+    mse = [1 - x for x in cv_scores]
+    # determining best k
+    optimal_k = neighbors[mse.index(min(mse))]
+    print("The optimal number of neighbors is {}".format(optimal_k))
+    # plot misclassification error vs k
+    plt.plot(neighbors, mse)
+    plt.xlabel("Number of Neighbors K")
+    plt.ylabel("Misclassification Error")
+    plt.show()
+
+#tuning_knn(neighbors, X_train, y_train, 5)
+#------------------------------------------------------------------------------
 """ params = {'n_neighbors': [2, 3, 4, 5, 6, 7, 8, 9, 10],
           'p': [1,2,3,4,5]}
 grid_search = GridSearchCV(KNeighborsClassifier(), params, cv=3, n_jobs=-1)
@@ -134,9 +165,9 @@ print('knn:')
 print("train score - " + str(grid_search.score(X_train, y_train)))
 print("test score - " + str(grid_search.score(X_val, y_val)))
 print(grid_search.best_params_)
-print('-'*20) """
+print('-'*20)
 
-""" params = {'C': [0.001, 0.01, 0.1, 1, 10, 100, 1000] }
+params = {'C': [0.001, 0.01, 0.1, 1, 10, 100, 1000] }
 grid_search = GridSearchCV(LogisticRegression(), params, cv=3, n_jobs=-1)
 grid_search.fit(X_train, y_train)
 print('-'*20)
@@ -150,19 +181,17 @@ from mlxtend.classifier import StackingCVClassifier
 
 clf = RandomForestClassifier(n_estimators=181, bootstrap=False, 
                                max_features='auto', random_state=SEED)
-print(clf.get_params)
 clf1 = KNeighborsClassifier(n_neighbors=1, p=1)
 clf2 = GaussianNB()
 clf3 = DecisionTreeClassifier(max_features='auto', random_state=SEED)
 clf4 = LinearDiscriminantAnalysis()
-clf5 = AdaBoostClassifier(base_estimator=clf3, n_estimators=100)
-lr = LogisticRegression(multi_class='multinomial', solver='newton-cg',random_state=SEED)
+clf5 = AdaBoostClassifier(base_estimator=clf3)
+lr = LogisticRegression(multi_class='multinomial', solver='newton-cg',
+                        random_state=SEED)
 
-
-sclf = StackingCVClassifier(classifiers=[clf, clf5],
-                                         meta_classifier=lr)
+sclf = StackingCVClassifier(classifiers=[clf, clf5],meta_classifier=lr)
 print('-'*20)
-print('5-fold cross validation:\n')
+print('3-fold cross validation:\n')
 
 for clf, label in zip([clf, clf5, sclf], 
                       ['Random Forest', 
@@ -173,12 +202,8 @@ for clf, label in zip([clf, clf5, sclf],
                        'Adaboost',
                        'StackingClassifier']):
 
-    scores = cross_val_score(clf, X.values, y.values, cv=5, scoring='accuracy')
+    scores = cross_val_score(clf, X.values, y.values, cv=3, scoring='accuracy')
     print("Accuracy: %0.2f (+/- %0.2f) [%s]" 
           % (scores.mean(), scores.std(), label))
 print('-'*20)
 
-abc = AdaBoostClassifier(base_estimator=clf3)
-model = abc.fit(X_train, y_train)
-y_pred = model.predict(X_val)
-print("Adaboost Accuracy: ",accuracy_score(y_val, y_pred))
