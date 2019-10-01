@@ -15,7 +15,8 @@ from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.ensemble import GradientBoostingClassifier, AdaBoostClassifier
+from sklearn.ensemble import GradientBoostingClassifier, AdaBoostClassifier, \
+    ExtraTreesClassifier
 from sklearn.gaussian_process.kernels import RBF
 from sklearn.naive_bayes import GaussianNB
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
@@ -177,22 +178,25 @@ print("test score - " + str(grid_search.score(X_val, y_val)))
 print(grid_search.best_params_)
 print('-'*20) """
 
-
-rfc = RandomForestClassifier(n_estimators=181, bootstrap=False, 
-                               max_features='auto', random_state=SEED)
-gbc = GradientBoostingClassifier(n_estimators=500, learning_rate=0.1,
-max_features='sqrt',max_depth=6,max_features=6,random_state=SEED)
-lr = LogisticRegression(multi_class='multinomial', solver='newton-cg',
+mlp = MLPClassifier(max_iter=100,activation='relu', alpha=0.0001, 
+                   hidden_layer_sizes=(50, 50, 50), learning_rate='constant', 
+                   solver='adam')
+rfc = RandomForestClassifier(n_estimators=400,
+                               max_features='sqrt', random_state=SEED)
+gbc = GradientBoostingClassifier(random_state=SEED)
+etc = ExtraTreesClassifier(n_estimators=200, random_state=SEED)
+lr = LogisticRegression(C=5, solver='liblinear', multi_class='ovr',
                         random_state=SEED)
 
 
 from mlxtend.classifier import StackingCVClassifier
-sclf = StackingCVClassifier(classifiers=[rfc, gbc], meta_classifier=lr)
+sclf = StackingCVClassifier(classifiers=[etc,rfc, gbc], meta_classifier=lr)
 print('-'*20)
 print('3-fold cross validation:\n')
 
-for clf, label in zip([rfc, gbc, sclf], 
-                      ['rfc', 
+for clf, label in zip([etc,rfc, gbc, sclf], 
+                      ['etc',
+                        'rfc', 
                        'gbc',
                        'StackingClassifier']):
 
@@ -202,8 +206,8 @@ for clf, label in zip([rfc, gbc, sclf],
 print('-'*20)
 
 
-grid = GridSearchCV(estimator=gbc, 
-                    param_grid={'max_features':[2,3,4,5,6,7]}, 
+grid = GridSearchCV(estimator=rfc, 
+                    param_grid={'criterion': ['entropy','gini']}, 
                     cv=3,
                     verbose=3,
                     refit=True)
