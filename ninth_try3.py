@@ -8,7 +8,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, roc_auc_score, classification_report
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
 from sklearn.model_selection import KFold, cross_val_score
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
@@ -178,40 +178,22 @@ print(grid_search.best_params_)
 print('-'*20) """
 
 
-knn = KNeighborsClassifier(n_neighbors=1, p=1)
-dtr = DecisionTreeClassifier(max_features='auto', random_state=SEED)
-mlpc = MLPClassifier(max_iter=100, activation= 'relu', alpha= 0.0001, 
-                     hidden_layer_sizes=(50, 100, 50), learning_rate='constant', 
-                     solver='adam', random_state=SEED)
+rfc = RandomForestClassifier(n_estimators=181, bootstrap=False, 
+                               max_features='auto', random_state=SEED)
+gbc = GradientBoostingClassifier(n_estimators=500, learning_rate=0.1,
+max_features='sqrt',max_depth=6,max_features=6,random_state=SEED)
 lr = LogisticRegression(multi_class='multinomial', solver='newton-cg',
                         random_state=SEED)
 
-""" parameter_space = {
-    'hidden_layer_sizes': [(50,50,50), (50,100,50), (100,)],
-    'activation': ['tanh', 'relu'],
-    'solver': ['sgd', 'adam'],
-    'alpha': [0.0001, 0.05],
-    'learning_rate': ['constant','adaptive'],
-}
-
-clf = GridSearchCV(mlpc, parameter_space, cv=3)
-clf.fit(X, y)
-print('Best parameters found:\n', clf.best_params_)
-means = clf.cv_results_['mean_test_score']
-stds = clf.cv_results_['std_test_score']
-for mean, std, params in zip(means, stds, clf.cv_results_['params']):
-    print("%0.3f (+/-%0.03f) for %r" % (mean, std * 2, params)) """
-
 
 from mlxtend.classifier import StackingCVClassifier
-sclf = StackingCVClassifier(classifiers=[knn, dtr, mlpc], meta_classifier=lr)
+sclf = StackingCVClassifier(classifiers=[rfc, gbc], meta_classifier=lr)
 print('-'*20)
 print('3-fold cross validation:\n')
 
-for clf, label in zip([knn, dtr, mlpc, sclf], 
-                      ['knn', 
-                       'dtr',
-                       'mlpc',
+for clf, label in zip([rfc, gbc, sclf], 
+                      ['rfc', 
+                       'gbc',
                        'StackingClassifier']):
 
     scores = cross_val_score(clf, X.values, y.values, cv=3, scoring='accuracy')
@@ -219,13 +201,11 @@ for clf, label in zip([knn, dtr, mlpc, sclf],
           % (scores.mean(), scores.std(), label))
 print('-'*20)
 
-""" params = {'randomforestclassifier__n_estimators': [81, 181],
-          'adaboostclassifier__n_estimators': [100, 200],
-          'meta_classifier__C': [0.1, 10.0]}
 
-grid = GridSearchCV(estimator=sclf, 
-                    param_grid=params, 
-                    cv=5,
+grid = GridSearchCV(estimator=gbc, 
+                    param_grid={'max_features':[2,3,4,5,6,7]}, 
+                    cv=3,
+                    verbose=3,
                     refit=True)
 grid.fit(X.values, y.values)
 
@@ -238,4 +218,4 @@ for r, _ in enumerate(grid.cv_results_['mean_test_score']):
              grid.cv_results_[cv_keys[2]][r]))
 
 print('Best parameters: %s' % grid.best_params_)
-print('Accuracy: %.2f' % grid.best_score_) """
+print('Accuracy: %.2f' % grid.best_score_)
