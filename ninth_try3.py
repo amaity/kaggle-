@@ -20,6 +20,7 @@ from sklearn.ensemble import GradientBoostingClassifier, AdaBoostClassifier, \
 from sklearn.gaussian_process.kernels import RBF
 from sklearn.naive_bayes import GaussianNB
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+import xgboost as xgb
 import time
 import warnings
 warnings.simplefilter('ignore')
