@@ -1,27 +1,6 @@
 import numpy as np 
 import pandas as pd
-
-import matplotlib.pyplot as plt
-import seaborn as sns
-sns.set(style="whitegrid")
-from sklearn.model_selection import train_test_split, GridSearchCV, \
-    KFold, cross_val_score
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.metrics import accuracy_score, roc_auc_score, classification_report
-from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.neural_network import MLPClassifier
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.ensemble import GradientBoostingClassifier, AdaBoostClassifier, \
-                             ExtraTreesClassifier, RandomForestClassifier
-from sklearn.gaussian_process.kernels import RBF
-from sklearn.naive_bayes import GaussianNB
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-import time
-import warnings
-warnings.simplefilter('ignore')
-SEED = 123
+from sklearn.ensemble import RandomForestClassifier
 
 #reading the files
 train = pd.read_csv("train.csv")
@@ -39,7 +18,7 @@ test = test.drop(['Id'], axis = 1)
 X = train.drop(['Cover_Type'], axis = 1)
 print(X.columns[(X < 0).any()])
 
-clf = RandomForestClassifier(random_state=SEED)
+clf = RandomForestClassifier(random_state=1)
 clf = clf.fit(X,y)
 
 def plotImpFeatures(X):
@@ -112,40 +91,59 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.cluster import KMeans
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, \
-    ExtraTreesClassifier, BaggingClassifier
+from lightgbm import LGBMClassifier
+from sklearn.ensemble import GradientBoostingClassifier, \
+    ExtraTreesClassifier, BaggingClassifier, AdaBoostClassifier
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
 import numpy as np
 import warnings
 warnings.simplefilter('ignore')
-
+#------------------------------------------------------------------------------
 clf1 = KNeighborsClassifier(n_neighbors=1)
 ##BaggingClassifier(DecisionTreeClassifier(max_leaf_nodes=2000), n_estimators=250,random_state=1)
 ##AdaBoostClassifier(base_estimator=RandomForestClassifier(), random_state=1)
 ##KNeighborsClassifier(n_neighbors=1)
 clf2 = RandomForestClassifier(n_estimators=181, max_features='sqrt', random_state=1)
 clf3 = ExtraTreesClassifier(n_estimators=400,max_depth=50,min_samples_split=2,random_state=1)
-clf4 = GradientBoostingClassifier(n_estimators=150,max_features='sqrt',max_depth=15,min_samples_split=200,random_state=1)
+clf4 = LGBMClassifier()
+#GradientBoostingClassifier(n_estimators=150,max_features='sqrt',max_depth=15,min_samples_split=200,random_state=1) ##acc:0.80
+#GradientBoostingClassifier(n_estimators=100,min_samples_leaf=1,max_depth=3,min_samples_split=2,random_state=1) #acc:0.74
 #clf5 = LogisticRegression(solver='newton-cg', multi_class='multinomial',random_state=1)
+#------------------------------------------------------------------------------
+param_test = {'n_estimators':range(50,301,50),
+'max_depth':range(3,16,2), 'learning_rate':[0.05,0.01,0.1,10],
+}
+#subsample=0.85, n_estimators=300, min_samples_split=400, min_samples_leaf=70, max_features=13, max_depth=15, score=0.811, total=  38.8s
 
+def randomSearch(clf,test_params):
+    rs = RandomizedSearchCV(estimator=clf4, param_distributions=param_test, scoring='accuracy', cv=3, verbose=3)
+    rs.fit(X,y)
+    print('-'*20)
+    print('Best parameters: ',rs.best_params_)
+    print('Best score: ',rs.best_score_)
+    print('-'*20)
 
+#randomSearch(clf4, param_test)
+#------------------------------------------------------------------------------
 param_test1 = {'base_estimator__max_leaf_nodes':[500,1000,2000,5000,8000]}
 param_test2 = {'max_depth':range(1,28,2), 'min_samples_split':range(10,101,5)}
 param_test3 = {'min_samples_split':range(1000,2100,200), 'min_samples_leaf':range(30,71,10)}
 neighbors = {'n_neighbors':list(range(1, 31, 2)), 'weights':['uniform','distance']}
 param_test4 = {'base_estimator__max_depth' : [1, 2, 3, 4, 5],'max_samples' : [0.05, 0.1, 0.2, 0.5]}
 param_test5 = {'n_clusters':range(1,11,1)}
-def gsearch(clf,test_params):
+
+def grifSearch(clf,test_params):
     gs = GridSearchCV(estimator=clf, param_grid=test_params, scoring='accuracy', cv=3, verbose=3)
     gs.fit(X,y)
     print('-'*20)
     print('Best parameters: ',gs.best_params_)
     print('Best score: ',gs.best_score_)
     print('-'*20)
-#gsearch(clf1, param_test5)
-
+#gridSearch(clf1, param_test5)
+#------------------------------------------------------------------------------
 print('5-fold cross validation:')
 clfs = [clf1, clf2, clf3, clf4]
-labels = ['Decision Tree', 'Random Forest', 'Extra Trees', 'Grad Boost']
+labels = ['KNeighbors', 'Random Forest', 'Extra Trees', 'Grad Boost']
 for clf, label in zip(clfs, labels):
     scores = model_selection.cross_val_score(clf, X, y, cv=5, 
                                               scoring='accuracy')
@@ -156,11 +154,11 @@ print('-'*20)
 from mlxtend.classifier import EnsembleVoteClassifier
 eclf = EnsembleVoteClassifier(clfs=clfs, weights=[1,1,1,1])
 clfs = [clf1, clf2, clf3, clf4, eclf]
-labels = ['Decision Tree', 'Random Forest', 'Extra Trees', 'Grad Boost', 'Ensemble']
+labels = ['KNeighbors', 'Random Forest', 'Extra Trees', 'Grad Boost', 'Ensemble']
 for clf, label in zip(clfs, labels):
     scores = model_selection.cross_val_score(clf, X, y, cv=5, 
                                               scoring='accuracy')
     print("Accuracy: %0.2f (+/- %0.2f) [%s]" 
           % (scores.mean(), scores.std(), label))
 print('-'*20)
-
+#------------------------------------------------------------------------------
