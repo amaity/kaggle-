@@ -110,10 +110,12 @@ clf4 = LGBMClassifier()
 #GradientBoostingClassifier(n_estimators=100,min_samples_leaf=1,max_depth=3,min_samples_split=2,random_state=1) #acc:0.74
 #clf5 = LogisticRegression(solver='newton-cg', multi_class='multinomial',random_state=1)
 #------------------------------------------------------------------------------
-param_test = {'n_estimators':range(50,301,50),
-'max_depth':range(3,16,2), 'learning_rate':[0.05,0.01,0.1,10],
+param_test = {'num_iterations':range(100,1001,100), 'learning_rate':[0.001,0.01,0.1,0.05],
+'num_leaves':range(21,101,2), 'max_bin':range(31,256,32),
 }
+#Best parameters:  {'num_leaves': 73, 'num_iterations': 100, 'learning_rate': 0.1} #LGBM acc:0.79
 #subsample=0.85, n_estimators=300, min_samples_split=400, min_samples_leaf=70, max_features=13, max_depth=15, score=0.811, total=  38.8s
+#Best parameters:  {'num_leaves': 91, 'num_iterations': 300, 'learning_rate': 0.1}, LGBM Best score:  0.799
 
 def randomSearch(clf,test_params):
     rs = RandomizedSearchCV(estimator=clf4, param_distributions=param_test, scoring='accuracy', cv=3, verbose=3)
@@ -123,7 +125,7 @@ def randomSearch(clf,test_params):
     print('Best score: ',rs.best_score_)
     print('-'*20)
 
-#randomSearch(clf4, param_test)
+randomSearch(clf4, param_test)
 #------------------------------------------------------------------------------
 param_test1 = {'base_estimator__max_leaf_nodes':[500,1000,2000,5000,8000]}
 param_test2 = {'max_depth':range(1,28,2), 'min_samples_split':range(10,101,5)}
@@ -132,18 +134,18 @@ neighbors = {'n_neighbors':list(range(1, 31, 2)), 'weights':['uniform','distance
 param_test4 = {'base_estimator__max_depth' : [1, 2, 3, 4, 5],'max_samples' : [0.05, 0.1, 0.2, 0.5]}
 param_test5 = {'n_clusters':range(1,11,1)}
 
-def grifSearch(clf,test_params):
+def gridSearch(clf,test_params):
     gs = GridSearchCV(estimator=clf, param_grid=test_params, scoring='accuracy', cv=3, verbose=3)
     gs.fit(X,y)
     print('-'*20)
     print('Best parameters: ',gs.best_params_)
     print('Best score: ',gs.best_score_)
     print('-'*20)
-#gridSearch(clf1, param_test5)
+#gridSearch(clf4, param_test)
 #------------------------------------------------------------------------------
 print('5-fold cross validation:')
 clfs = [clf1, clf2, clf3, clf4]
-labels = ['KNeighbors', 'Random Forest', 'Extra Trees', 'Grad Boost']
+labels = ['KNeighbors', 'Random Forest', 'Extra Trees', 'LGBM']
 for clf, label in zip(clfs, labels):
     scores = model_selection.cross_val_score(clf, X, y, cv=5, 
                                               scoring='accuracy')
@@ -154,7 +156,7 @@ print('-'*20)
 from mlxtend.classifier import EnsembleVoteClassifier
 eclf = EnsembleVoteClassifier(clfs=clfs, weights=[1,1,1,1])
 clfs = [clf1, clf2, clf3, clf4, eclf]
-labels = ['KNeighbors', 'Random Forest', 'Extra Trees', 'Grad Boost', 'Ensemble']
+labels = ['KNeighbors', 'Random Forest', 'Extra Trees', 'LGBM', 'Ensemble']
 for clf, label in zip(clfs, labels):
     scores = model_selection.cross_val_score(clf, X, y, cv=5, 
                                               scoring='accuracy')
