@@ -1,10 +1,6 @@
-import os, pickle
 import numpy as np 
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.model_selection import GridSearchCV
-from sklearn.metrics import classification_report
-from sklearn.svm import SVC
+from sklearn.ensemble import RandomForestClassifier
 
 #reading the files
 train = pd.read_csv("train.csv")
@@ -14,86 +10,169 @@ test = pd.read_csv("test.csv")
 y = train.Cover_Type
 test_id = test['Id']
 
-import os, pickle
+#dropping Ids
+train = train.drop(['Id'], axis = 1)
+test = test.drop(['Id'], axis = 1)
 
-if os.path.isfile("/X.pickle"):
-    with open( "X.pickle", "rb" ) as fh1:
-        X = pickle.load(fh1)
-    with open('test.pickle', 'rb') as fh2:
-        test = pickle.load(fh2)
-else:
-    #dropping Soil_Type7 and Soil_Type15
-    train = train.drop(['Id','Soil_Type7', 'Soil_Type15'], axis = 1)
-    test = test.drop(['Id','Soil_Type7', 'Soil_Type15'], axis = 1)
+#prepare data for training the model
+X = train.drop(['Cover_Type'], axis = 1)
+print(X.columns[(X < 0).any()])
 
-    #prepare data for training the model
-    X = train.drop(['Cover_Type'], axis = 1)
+clf = RandomForestClassifier(random_state=1)
+clf = clf.fit(X,y)
 
-    #reducing Soil_Type cols to single col 
-    X = X.iloc[:, :14].join(X.iloc[:, 14:].dot(range(1,39)).to_frame('Soil_Type1'))
-    test = test.iloc[:, :14].join(test.iloc[:, 14:].dot(range(1,39)).to_frame('Soil_Type1'))
-    #print(X.columns)
-    #reducing Wilderness_Area to single col 
-    X = X.iloc[:,:10].join(X.iloc[:,10:-1].dot(range(1,5)).to_frame('Wilderness_Area1')).join(X.iloc[:,-1])
-    test = test.iloc[:,:10].join(test.iloc[:,10:-1].dot(range(1,5)).to_frame('Wilderness_Area1')).join(test.iloc[:,-1])
+def plotImpFeatures(X):
+    features = pd.DataFrame({'Features': X.columns, 
+                         'Importances': clf.feature_importances_})
+    features.sort_values(by=['Importances'], axis='index', ascending=False, inplace=True)
+    plt.figure(figsize=(12,4))
+    sns.barplot(x='Features', y='Importances', data=features)
+    plt.xticks(rotation='vertical')
+    plt.show()
 
-    #pickling data for quick access
-    with open('X.pickle', 'wb') as fh1:
-        pickle.dump(X, fh1)
-    with open('test.pickle', 'wb') as fh2:
-        pickle.dump(test, fh2)
+#plotImpFeatures(X)
 
-print(X.columns)
+#PREPROCESS-------------------------------------------------------------------
 
-#split data
-from sklearn.model_selection import train_test_split
-X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2)
+def preprocess(df):
+    #horizontal and vertical distance to hydrology can be easily combined
+    cols = ['Horizontal_Distance_To_Hydrology', 'Vertical_Distance_To_Hydrology']
+    df['Distance_to_hydrology'] = df[cols].apply(np.linalg.norm, axis=1)
+    
+    #adding a few combinations of distance features to help enhance the classification
+    cols = ['Horizontal_Distance_To_Roadways','Horizontal_Distance_To_Fire_Points',
+            'Horizontal_Distance_To_Hydrology']
+    df['distance_mean'] = df[cols].mean(axis=1)
+    df['distance_sum'] = df[cols].sum(axis=1)
+    df['distance_dif_road_fire'] = df[cols[0]] - df[cols[1]]
+    df['distance_dif_hydro_road'] = df[cols[2]] - df[cols[0]]
+    df['distance_dif_hydro_fire'] = df[cols[2]] - df[cols[1]]
+    
+    #taking some factors influencing the amount of radiation
+    df['Cosine_of_slope'] = np.cos(np.radians(df['Slope']) )
+    #X['Diff_azimuth_aspect_9am'] = np.cos(np.radians(123.29-X['Aspect']))
+    #X['Diff_azimuth_aspect_12noon'] = np.cos(np.radians(181.65-X['Aspect']))
+    #X['Diff_azimuth_aspect_3pm'] = np.cos(np.radians(238.56-X['Aspect']))
 
-from sklearn.model_selection import GridSearchCV 
+    #sum of Hillshades
+    shades = ['Hillshade_9am', 'Hillshade_Noon', 'Hillshade_3pm']
+    #df['Sum_of_shades'] = df[shades].sum(1)
+    weights = pd.Series([0.299, 0.587, 0.114], index=cols)
+    df['Hillshade'] = (df[shades]*weights).sum(1)
 
-# defining parameter range 
-param_grid = [  {'kernel': ['linear'], 'C': [0.1, 1, 10, 100]},
-                {'kernel': ['rbf'], 'gamma': [1e-3, 1e-4], 'C': [1, 10, 100, 1000]}]  
-scores = ['precision', 'recall']
+    df['Elevation_VDH'] = df['Elevation'] - df['Vertical_Distance_To_Hydrology']
+    return df
 
-for score in scores:
-    print("# Tuning hyper-parameters for %s" % score)
-    print()
+X = preprocess(X)
+test = preprocess(test)
+#print(X.columns)
+#print(X.loc[(X==0).any(axis=1)].columns)
+#------------------------------------------------------------------------------
 
-    clf = GridSearchCV(SVC(), param_grid, cv=5, verbose=3, scoring='%s_macro' % score)
-    clf.fit(X_train, y_train)
+def drop_unimportant(df):
+    df_ = df.copy()
+    n_rows = df_.shape[0]
+    hi_freq_cols = []
+    for col in X.columns:
+        mode_frequency = 100.0 * df_[col].value_counts().iat[0] / n_rows 
+        if mode_frequency > 99.0:
+            hi_freq_cols.append(col)
+    df_ = df_.drop(hi_freq_cols, axis='columns')
+    return df_
 
-    print("Best parameters set found on development set:")
-    print()
-    print(clf.best_params_)
-    print()
-    print("Grid scores on development set:")
-    print()
-    means = clf.cv_results_['mean_test_score']
-    stds = clf.cv_results_['std_test_score']
-    for mean, std, params in zip(means, stds, clf.cv_results_['params']):
-        print("%0.3f (+/-%0.03f) for %r"
-              % (mean, std * 2, params))
-    print()
+X = drop_unimportant(X)
+feature_names = list(X.columns)
+test = test[feature_names]
+print(X.shape)
+print(test.shape)
+#------------------------------------------------------------------------------
 
-    print("Detailed classification report:")
-    print()
-    print("The model is trained on the full development set.")
-    print("The scores are computed on the full evaluation set.")
-    print()
-    y_true, y_pred = y_val, clf.predict(test)
-    print(classification_report(y_true, y_pred))
-    print()
+from sklearn import model_selection
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import LinearSVC
+from sklearn.naive_bayes import GaussianNB 
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.neural_network import MLPClassifier
+from sklearn.cluster import KMeans
+from lightgbm import LGBMClassifier
+from sklearn.ensemble import GradientBoostingClassifier, \
+    ExtraTreesClassifier, BaggingClassifier, AdaBoostClassifier
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
+import numpy as np
+import warnings
+warnings.simplefilter('ignore')
 
+import os
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
+#------------------------------------------------------------------------------
+clf1 = KNeighborsClassifier(n_neighbors=1)
+##BaggingClassifier(DecisionTreeClassifier(max_leaf_nodes=2000), n_estimators=250,random_state=1)
+##AdaBoostClassifier(base_estimator=RandomForestClassifier(), random_state=1)
+##KNeighborsClassifier(n_neighbors=1)
+clf2 = RandomForestClassifier(n_estimators=181, max_features='sqrt', random_state=1)
+clf3 = ExtraTreesClassifier(n_estimators=400,max_depth=50,min_samples_split=2,random_state=1)
+clf4 = LGBMClassifier(num_leaves=90,random_state=1)
 
-""" grid = GridSearchCV(SVC(), param_grid, refit = True, cv=5, verbose = 3)
-# fitting the model for grid search
-grid.fit(X_train, y_train)
-# print best parameter after tuning 
-print('Best parameters: ',grid.best_params_)
-# print how our model looks after hyper-parameter tuning 
-print('Best estimator: ',grid.best_estimator_)
-grid_predictions = grid.predict(X_val) 
+#------------------------------------------------------------------------------
+param_test = {'num_leaves':[7,31,90,127,511], # 2**max_depth-1
+                                        'min_child_samples':[5,20,50,100],
+                                        'min_split_gain':[i/10. for i in range(0,4)],
+                                        'subsample':[i/10.0 for i in range(6,10)],
+                                        'colsample_bytree':[i/10.0 for i in range(6,10)],
+                                        'reg_alpha':[1e-6, 1e-2, 0.1, 1, 100],
+                                        'reg_lambda':[1e-6, 1e-2, 0.1, 1, 100]}
 
-# print classification report 
-print(classification_report(y_val, grid_predictions)) """
+def randomSearch(clf,test_params):
+    rs = RandomizedSearchCV(estimator=clf4, param_distributions=param_test, scoring='accuracy', cv=3, verbose=3)
+    rs.fit(X,y)
+    print('-'*20)
+    print('Best parameters: ',rs.best_params_)
+    print('Best score: ',rs.best_score_)
+    print('-'*20)
+
+#randomSearch(clf4, param_test)
+#------------------------------------------------------------------------------
+knn_grid = {    
+    'n_neighbors': [1,2,3,4,5],
+    'weights': ['uniform','distance'],      
+    'algorithm': ['auto', 'brute', 'ball_tree','kd_tree']  , 
+    'p': [1,2]  
+    }
+
+def gridSearch(clf,test_params):
+    gs = GridSearchCV(estimator=clf, param_grid=test_params, scoring='accuracy', cv=3, verbose=3)
+    gs.fit(X,y)
+    print('-'*20)
+    print('Best parameters: ',gs.best_params_)
+    print('Best score: ',gs.best_score_)
+    print('-'*20)
+
+#gridSearch(clf1, knn_grid)
+#------------------------------------------------------------------------------
+print('-'*20)
+from mlxtend.classifier import EnsembleVoteClassifier
+eclf = EnsembleVoteClassifier(clfs=[clf1, clf2, clf3, clf4], weights=[1,1,1,1])
+clfs = [clf1, clf2, clf3, clf4, eclf]
+labels = ['KNeighbors', 'Random Forest', 'Extra Trees', 'LGBM', 'Ensemble']
+for clf, label in zip(clfs, labels):
+    scores = model_selection.cross_val_score(clf, X, y, cv=5, 
+                                              scoring='accuracy')
+    print("Accuracy: %0.2f (+/- %0.2f) [%s]" 
+          % (scores.mean(), scores.std(), label))
+print('-'*20)
+#------------------------------------------------------------------------------
+lr = LogisticRegression(multi_class='multinomial', solver='newton-cg', random_state=1)
+
+from mlxtend.classifier import StackingCVClassifier
+sclf = StackingCVClassifier(classifiers=[clf1, clf2, clf3, clf4],meta_classifier=lr)
+
+print('5-fold cross validation:\n')
+
+for clf, label in zip([clf1, clf2, clf3, clf4, sclf], 
+                      ['KNN', 'Random Forest', 'Extra Trees','LGBM','StackingClf']):
+
+    scores = model_selection.cross_val_score(clf, X.values, y.values, 
+                                              cv=5, scoring='accuracy')
+    print("Accuracy: %0.2f (+/- %0.2f) [%s]" 
+          % (scores.mean(), scores.std(), label))
