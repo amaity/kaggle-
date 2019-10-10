@@ -9,10 +9,10 @@ from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
 import warnings
 warnings.simplefilter('ignore')
 #------------------------------------------------------------------------------
-import logging
-from heamy.dataset import Dataset
-from heamy.estimator import Classifier
-from heamy.pipeline import ModelsPipeline
+#import logging
+#from heamy.dataset import Dataset
+#from heamy.estimator import Classifier
+#from heamy.pipeline import ModelsPipeline
 #------------------------------------------------------------------------------
 train = pd.read_csv("train.csv", index_col='Id')
 test = pd.read_csv("test.csv", index_col='Id')
@@ -48,6 +48,39 @@ def addFeatures(df):
     print('Total number of features : %d' % (df.shape)[1])
     return df
 #------------------------------------------------------------------------------
+
+def preprocessData(train, test):
+
+    y_train = train['Cover_Type']
+    
+    classes = train.Cover_Type.unique()
+    num_classes = len(classes)
+    print("There are %i classes: %s " % (num_classes, classes))
+    train.drop(['Cover_Type'], axis=1, inplace=True)
+
+    train = addFeatures(train)    
+    test = addFeatures(test)
+
+    dtrn_first_ten = train.loc[:,:'Horizontal_Distance_To_Fire_Points']
+    dtrn_wa_st = train.loc[:,'Wilderness_Area1':'Soil_Type40']
+    dtrn_added_features = train.loc[:,'distance_to_hydrology':]
+    dtrn_ = pd.concat([dtrn_first_ten,dtrn_added_features,dtrn_wa_st],axis=1)
+
+    dtst_first_ten = test.loc[:,:'Horizontal_Distance_To_Fire_Points']
+    dtst_wa_st = test.loc[:,'Wilderness_Area1':'Soil_Type40']
+    dtst_added_features = test.loc[:,'distance_to_hydrology':]
+    dtst_ = pd.concat([dtst_first_ten,dtst_added_features,dtst_wa_st],axis=1)
+    
+    # elevation was found to have very different distributions on test and training sets
+    # lets just drop it for now to see if we can implememnt a more robust classifier!
+    #train = train.drop('Elevation', axis=1)
+    #test = test.drop('Elevation', axis=1)    
+
+    return {'X_train': dtrn_, 'X_test': dtst_, 'y_train': y_train}  #dtrn_, dtst_, y_train
+#------------------------------------------------------------------------------
+pp = preprocessData(train, test)
+X, test, y = pp['X_train'], pp['X_test'], pp['y_train']
+#------------------------------------------------------------------------------
 weights = [11.393577400361757, 1.4282825089634368, 0.6063107664752647, 1, 1.916980442614397, 
 1.0945477432742674, 1.668754279754504, 1.7520168478233817, 8.207420802921982, 
 0.7501841943847916, 1.9971420119714571, 2.72057743717325, 2.0, 1.575220244799055, 
@@ -75,39 +108,8 @@ def getWeights(X,test):
         test_copy[c] = weights[20]*test_copy[c]
     return X_copy, test_copy
 #------------------------------------------------------------------------------
-def preprocessData(train, test):
-
-    y_train = train['Cover_Type'].ravel() -1
-    
-    classes = train.Cover_Type.unique()
-    num_classes = len(classes)
-    print("There are %i classes: %s " % (num_classes, classes))
-    train.drop(['Cover_Type'], axis=1, inplace=True)
-
-    train = addFeatures(train)    
-    test = addFeatures(test)
-
-    dtrn_first_ten = train.loc[:,:'Horizontal_Distance_To_Fire_Points']
-    dtrn_wa_st = train.loc[:,'Wilderness_Area1':'Soil_Type40']
-    dtrn_added_features = train.loc[:,'distance_to_hydrology':]
-    dtrn_ = pd.concat([dtrn_first_ten,dtrn_added_features,dtrn_wa_st],axis=1)
-
-    dtst_first_ten = test.loc[:,:'Horizontal_Distance_To_Fire_Points']
-    dtst_wa_st = test.loc[:,'Wilderness_Area1':'Soil_Type40']
-    dtst_added_features = test.loc[:,'distance_to_hydrology':]
-    dtst_ = pd.concat([dtst_first_ten,dtst_added_features,dtst_wa_st],axis=1)
-    
-    # elevation was found to have very different distributions on test and training sets
-    # lets just drop it for now to see if we can implememnt a more robust classifier!
-    #train = train.drop('Elevation', axis=1)
-    #test = test.drop('Elevation', axis=1)    
-
-    return {'X_train': dtrn_.values, 'X_test': dtst_.values, 'y_train': y_train}  #dtrn_, dtst_, y_train
+X_copy, test_copy = getWeights(X, test)
 #------------------------------------------------------------------------------
-pp = preprocessData(train, test)
-X, test, y = pp['X_train'], pp['X_test'], pp['y_train']
-#------------------------------------------------------------------------------
-
 from sklearn import model_selection
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
@@ -129,8 +131,8 @@ clf2 = RandomForestClassifier(n_estimators=300, max_features='sqrt', bootstrap=F
                               min_samples_split=2,min_samples_leaf=1,random_state=1)
 clf3 = ExtraTreesClassifier(n_estimators=400,max_depth=50,min_samples_split=5,
                              min_samples_leaf=1,max_features=63,random_state=1)
-clf4 = LGBMClassifier(num_leaves=109,objective='multiclass',num_class=7,
-                       learning_rate=0.2,random_state=1)
+clf4 = LGBMClassifier(objective='multiclass',num_class=7,learning_rate=0.2,random_state=1) #num_leaves=109,
+lr = LogisticRegression(multi_class='multinomial', solver='newton-cg', random_state=1)
 #------------------------------------------------------------------------------
 rf_param = {    
     'n_estimators': [250, 300, 350, 400],
@@ -155,6 +157,10 @@ lgb_param = {
     'boosting_type': ['gbdt','dart','goss']
 }
 
+lr_param = {
+    'C': [0.001, 0.01, 0.1, 1, 10, 100, 1000],
+}
+
 def gridSearch(clf,test_params):
     rs = RandomizedSearchCV(estimator=clf, param_distributions=test_params, scoring='accuracy', cv=3, verbose=3)
     rs.fit(X_copy,y)
@@ -163,24 +169,21 @@ def gridSearch(clf,test_params):
     print('Best score: ',rs.best_score_)
     print('-'*20)
 
-#gridSearch(clf4, lgb_param)
+#gridSearch(lr, lr_param)
 #------------------------------------------------------------------------------
 
-lr = LogisticRegression(multi_class='multinomial', solver='lbfgs', random_state=1)
-#adb = AdaBoostClassifier(base_estimator=DecisionTreeClassifier(random_state=1),random_state=1)
-
 from mlxtend.classifier import StackingCVClassifier
-sclf = StackingCVClassifier(classifiers=[clf1, clf2, clf3, clf4],meta_classifier=lr)
+sclf = StackingCVClassifier(classifiers=[clf1, clf2, clf3, lr],meta_classifier=clf4)
 
 print('5-fold cross validation:\n')
 
-for clf, label in zip([clf1, clf2, clf3, clf4, sclf], 
-                      ['KNN', 'Random Forest', 'Extra Trees','LGBM','StackingClf']):
+for clf, label in zip([clf1, clf2, clf3, lr, sclf], 
+                      ['KNN', 'Random Forest', 'Extra Trees','LogReg','StackingClf']):
 
-    scores = model_selection.cross_val_score(clf, X_copy, y, cv=5, scoring='accuracy')
+    scores = model_selection.cross_val_score(clf, X_copy.values, y.values, cv=5, scoring='accuracy')
     print("Accuracy: %0.3f (+/- %0.2f) [%s]" % (scores.mean(), scores.std(), label))
 #------------------------------------------------------------------------------
-sclf.fit(X_copy,y)
-sclf_preds = sclf.predict(test_copy)
-print(eclf_preds[:10])
+#sclf.fit(X_copy.values,y.values)
+#sclf_preds = sclf.predict(test_copy.values)
+#print(sclf_preds[:10])
 #------------------------------------------------------------------------------
