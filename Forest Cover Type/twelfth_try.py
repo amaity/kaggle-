@@ -16,7 +16,7 @@ warnings.simplefilter('ignore')
 #------------------------------------------------------------------------------
 train = pd.read_csv("train.csv", index_col='Id')
 test = pd.read_csv("test.csv", index_col='Id')
-print(train.columns)
+#print(train.columns)
 #------------------------------------------------------------------------------
 def addFeatures(df):
     #horizontal and vertical distance to hydrology can be easily combined
@@ -53,6 +53,9 @@ def addFeatures(df):
     df['proba_Aspen'] = (df['Elevation'].isin(range(1500,3600))).astype(int)
     df['proba_Douglas'] = (df['Elevation'].isin(range(500,3000))).astype(int)
     df['proba_Krummholz'] = (df['Elevation'].isin(range(2800,4000))).astype(int)
+    cols = ['proba_Spruce','proba_Lodgepole','proba_Ponderosa','proba_Cottonwood',
+            'proba_Aspen','proba_Douglas','proba_Krummholz']
+    df[cols] = df[cols].div(df[cols].sum(1), axis=0)
 
     print('Total number of features : %d' % (df.shape)[1])
     return df
@@ -90,11 +93,111 @@ def preprocessData(train, test):
 pp = preprocessData(train, test)
 X, test, y = pp['X_train'], pp['X_test'], pp['y_train']
 #------------------------------------------------------------------------------
-weights = [11.393577400361757, 1.4282825089634368, 0.6063107664752647, 1, 1.916980442614397, 
+def drop_unimportant(df):
+    df_ = df.copy()
+    n_rows = df_.shape[0]
+    hi_freq_cols = []
+    for col in X.columns:
+        mode_frequency = 100.0 * df_[col].value_counts().iat[0] / n_rows 
+        if mode_frequency > 99.0:
+            hi_freq_cols.append(col)
+    df_ = df_.drop(hi_freq_cols, axis='columns')
+    return df_
+
+X = drop_unimportant(X)
+print(X.shape)
+#------------------------------------------------------------------------------
+def initialWeights(list_of_weights,list_of_col_names,col_name,weight):
+    indices = [i for i, el in enumerate(list_of_col_names) if col_name in el]
+    for idx in indices:
+        list_of_weights.insert(idx,wt)
+    return weights
+#------------------------------------------------------------------------------
+def getWeights(X_full, y_full):
+    cols = list(X_full.columns.values)
+    print(cols)
+    #starting weights
+    weights = [2]*X_full.shape[1]
+    weights = initialWeights(weights, 'Elevation', 10)
+    print(weights)
+    
+    best_score_ever=0
+    best_ever_wts = [i for i in weights]
+    lr = 0.5
+    
+    for step in range(2):        
+        X_full_copy = X_full.copy()
+
+        for i in range(19):
+            c = X_full.columns[i]
+            X_full_copy[c] *= weights[i]
+        for i in range(19,23):
+            c = X_full.columns[i]
+            X_full_copy[c] *= weights[19]
+        for i in range(23,len(X_full.columns)):
+            c = X_full.columns[i]
+            X_full_copy[c] *= weights[20]
+
+        r = lr*random.random()
+        
+        
+        # Choose a random weight to change
+        train_index = random.randint(0,20)
+        train_col = X_full.columns[train_index]
+        
+        # We will test four factors for changing the current weight.
+        factors = [1-r,1,1+r, 1+2*r]        
+        wts = [weights[train_index] * f for f in factors]
+
+        best_score=0
+        best_wt=-1
+
+        for wt in wts:  
+            if train_index<19:            
+                X_full_copy[train_col] = wt * X_full[train_col]
+            if train_index==19: 
+                for i in range(19,23):
+                    c = X_full.columns[i]
+                    X_full_copy[c] = wt*X_full[c]
+            if train_index > 19: 
+                for i in range(23,len(X_full.columns)):
+                    c = X_full.columns[i]
+                    X_full_copy[c] = wt*X_full[c]
+
+            model = NearestNeighbors(n_neighbors=2, algorithm='ball_tree')
+            distances, indices  = model.fit(X_full_copy).kneighbors(X_full_copy)
+            
+            # we use the second best because the first best is itself.
+            second_best = indices[:,1]
+            labels = y_full.tolist()
+            my_labels = [labels[i] for i in second_best]
+            score = accuracy_score(labels, my_labels)        
+
+            if score > best_score_ever :
+                best_score_ever = score
+                best_ever_wts = [i for i in weights]
+                best_ever_wts[train_index] = wt
+                print("\tnew best ever:",best_score_ever)
+            if score > best_score:
+                best_wt=wt
+                best_score=score
+
+        old_wt =  weights[train_index] 
+        
+        # Notice that I only go half-way to the new weights.  Just seemed like a good idea, but not sure.
+        weights[train_index] =  (weights[train_index]+best_wt)/2
+        
+        print("step",step,"col",train_index,"best",round(old_wt,2),"->",round(best_wt,2), "\t",best_score) 
+    return best_ever_wts, weights
+
+best_weights, final_weights = getWeights(X, y)
+print('Final weights: ',final_weights)
+weights = final_weights
+""" weights = [11.393577400361757, 1.4282825089634368, 0.6063107664752647, 1, 1.916980442614397, 
 1.0945477432742674, 1.668754279754504, 1.7520168478233817, 8.207420802921982, 
 0.7501841943847916, 1.9971420119714571, 2.72057743717325, 2.0, 1.575220244799055, 
 2.0695773922466643, 2.536316322049836, 0.46168425088806536, 0.4420755307264942, 
-10.660977569012896, 876.0230240897795, 795.52134403456]
+10.660977569012896, 876.0230240897795, 795.52134403456] """
 #------------------------------------------------------------------------------
 from sklearn.neighbors import KNeighborsClassifier
 knn = KNeighborsClassifier(n_neighbors=1,p=1)
@@ -186,7 +289,7 @@ def gridSearch(clf,test_params):
 #gridSearch(clf4, lgb_param)
 #------------------------------------------------------------------------------
 
-from mlxtend.classifier import StackingCVClassifier
+""" from mlxtend.classifier import StackingCVClassifier
 sclf = StackingCVClassifier(classifiers=[rnf, etr, lrg],meta_classifier=lgb)
 
 print('5-fold cross validation:\n')
@@ -195,7 +298,7 @@ for clf, label in zip([rnf, etr, lrg, sclf],
                       ['Random Forest', 'Extra Trees','Logistic Reg','StackingClf']):
 
     scores = model_selection.cross_val_score(clf, X_copy.values, y.values, cv=5, scoring='accuracy')
-    print("Accuracy: %0.3f (+/- %0.2f) [%s]" % (scores.mean(), scores.std(), label))
+    print("Accuracy: %0.3f (+/- %0.2f) [%s]" % (scores.mean(), scores.std(), label)) """
 #------------------------------------------------------------------------------
 #sclf.fit(X_copy.values,y.values)
 #sclf_preds = sclf.predict(test_copy.values)
