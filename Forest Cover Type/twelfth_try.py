@@ -45,6 +45,15 @@ def addFeatures(df):
     df['hillshade'] = (df[shades]*weights).sum(1)
 
     df['elevation_vdh'] = df['Elevation'] - df['Vertical_Distance_To_Hydrology']
+    #classifying elevation
+    df['proba_Spruce'] = (df['Elevation'].isin(range(2500,3700))).astype(int)
+    df['proba_Lodgepole'] = (df['Elevation'].isin(range(0,3500))).astype(int)
+    df['proba_Ponderosa'] = (df['Elevation'].isin(range(0,3000))).astype(int)
+    df['proba_Cottonwood'] = (df['Elevation'].isin(range(1500,2600))).astype(int)
+    df['proba_Aspen'] = (df['Elevation'].isin(range(1500,3600))).astype(int)
+    df['proba_Douglas'] = (df['Elevation'].isin(range(500,3000))).astype(int)
+    df['proba_Krummholz'] = (df['Elevation'].isin(range(2800,4000))).astype(int)
+
     print('Total number of features : %d' % (df.shape)[1])
     return df
 #------------------------------------------------------------------------------
@@ -88,7 +97,7 @@ weights = [11.393577400361757, 1.4282825089634368, 0.6063107664752647, 1, 1.9169
 10.660977569012896, 876.0230240897795, 795.52134403456]
 #------------------------------------------------------------------------------
 from sklearn.neighbors import KNeighborsClassifier
-clf1 = KNeighborsClassifier(n_neighbors=1,p=1)
+knn = KNeighborsClassifier(n_neighbors=1,p=1)
 
 def getWeights(X,test):
     X_copy = X.copy()
@@ -120,6 +129,9 @@ from lightgbm import LGBMClassifier
 from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier, \
     AdaBoostClassifier
 from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
+from sklearn.multiclass import OneVsRestClassifier
+#from sklearn.neural_network import MLPClassifier
+from sklearn.svm import SVC
 import os
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
@@ -127,12 +139,14 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 ##BaggingClassifier(DecisionTreeClassifier(max_leaf_nodes=2000), n_estimators=250,random_state=1)
 ##AdaBoostClassifier(base_estimator=RandomForestClassifier(), random_state=1)
 ##KNeighborsClassifier(n_neighbors=1)
-clf2 = RandomForestClassifier(n_estimators=300, max_features='sqrt', bootstrap=False,max_depth=60,
+rnf = RandomForestClassifier(n_estimators=300, max_features='sqrt', bootstrap=False,max_depth=60,
                               min_samples_split=2,min_samples_leaf=1,random_state=1)
-clf3 = ExtraTreesClassifier(n_estimators=400,max_depth=50,min_samples_split=5,
-                             min_samples_leaf=1,max_features=63,random_state=1)
-clf4 = LGBMClassifier(objective='multiclass',num_class=7,learning_rate=0.2,random_state=1) #num_leaves=109,
-lr = LogisticRegression(multi_class='multinomial', solver='newton-cg', random_state=1)
+etr = ExtraTreesClassifier(n_estimators=400,max_depth=50,min_samples_split=5,
+                             min_samples_leaf=1,max_features=63,random_state=1) 
+lgb = LGBMClassifier(objective='multiclass',num_class=7,learning_rate=0.2,num_leaves=149,random_state=1) #num_leaves=109,
+lrg = LogisticRegression(multi_class='multinomial', solver='newton-cg', random_state=1)
+#mlp = MLPClassifier(hidden_layer_sizes = [100]*5)
+svm = SVC(decision_function_shape='ovr')
 #------------------------------------------------------------------------------
 rf_param = {    
     'n_estimators': [250, 300, 350, 400],
@@ -151,8 +165,8 @@ et_param = {
     }
 
 lgb_param = {
-    'num_leaves': range(31,151,2),
-    'learning_rate': [0.005,0.001,0.01,0.2],
+    'num_leaves': range(51,201,2),
+    'learning_rate': [0.05,0.001,0.01,0.2],
     'class_weight': [None, 'balanced'],
     'boosting_type': ['gbdt','dart','goss']
 }
@@ -169,16 +183,16 @@ def gridSearch(clf,test_params):
     print('Best score: ',rs.best_score_)
     print('-'*20)
 
-#gridSearch(lr, lr_param)
+#gridSearch(clf4, lgb_param)
 #------------------------------------------------------------------------------
 
 from mlxtend.classifier import StackingCVClassifier
-sclf = StackingCVClassifier(classifiers=[clf1, clf2, clf3, lr],meta_classifier=clf4)
+sclf = StackingCVClassifier(classifiers=[rnf, etr, lrg],meta_classifier=lgb)
 
 print('5-fold cross validation:\n')
 
-for clf, label in zip([clf1, clf2, clf3, lr, sclf], 
-                      ['KNN', 'Random Forest', 'Extra Trees','LogReg','StackingClf']):
+for clf, label in zip([rnf, etr, lrg, sclf], 
+                      ['Random Forest', 'Extra Trees','Logistic Reg','StackingClf']):
 
     scores = model_selection.cross_val_score(clf, X_copy.values, y.values, cv=5, scoring='accuracy')
     print("Accuracy: %0.3f (+/- %0.2f) [%s]" % (scores.mean(), scores.std(), label))
