@@ -62,7 +62,18 @@ def addFeatures(df):
     df[cols] = df[cols].div(df[cols].sum(1), axis=0) """
 
     #slope
-    df["slope_times_elevation"] = df["Slope"] * df["Elevation"]
+    #df["slope_times_elevation"] = df["Slope"] * df["Elevation"]
+
+    #binned features
+    bin_defs = [
+        # col name, bin size, new name
+        ('Elevation', 200, 'Binned_Elevation'), 
+        ('Aspect', 45, 'Binned_Aspect'),
+        ('Slope', 6, 'Binned_Slope'),
+    ]
+    
+    for col_name, bin_size, new_name in bin_defs:
+        df[new_name] = np.floor(df[col_name]/bin_size)
 
     print('Total number of features : %d' % (df.shape)[1])
     return df
@@ -89,6 +100,9 @@ def preprocessData(train, test):
     dtst_wa_st = test.loc[:,'Wilderness_Area1':'Soil_Type40']
     dtst_added_features = test.loc[:,'distance_to_hydrology':]
     dtst_ = pd.concat([dtst_first_ten,dtst_added_features,dtst_wa_st],axis=1)
+    
+    train.loc[:,:'Binned_Slope'] = normalize(train.loc[:,:'Binned_Slope'])
+    test.loc[:,:'Binned_Slope'] = normalize(test.loc[:,:'Binned_Slope'])
     
     # elevation was found to have very different distributions on test and training sets
     # lets just drop it for now to see if we can implememnt a more robust classifier!
@@ -125,17 +139,17 @@ def getWeights(X_full, y_full):
     cols = list(X_full.columns.values)
     print(cols)
     #starting weights
-    weights = [2]*X_full.shape[1]
+    weights = [1]*X_full.shape[1]
     weights = initialWeights(weights, cols, 'Elevation', 11)
-    weights = initialWeights(weights, cols, 'Wilderness', 800)
-    weights = initialWeights(weights, cols, 'Soil', 800)
+    weights = initialWeights(weights, cols, 'Wilderness', 400)
+    weights = initialWeights(weights, cols, 'Soil', 400)
     #weights = [11.0, 1.8966780735976558, 1.6120773615774247, 2.9104696920199613, 2.5006363482036824, 0.9871036869612939, 3.9071493085706535, 3.028610939074762, 2, 2, 2.5971335388285555, 1.95049626157544, 2, 2, 2, 2.064198730498835, 2, 2, 2, 1.4022139176731565, 1.8804240362084423, 2, 1.631559223024593, 1.678540466077829, 1.9104247503364242, 1.5786691390582834, 800, 696.6507031611867, 1101.681191354803, 705.7293768245202, 563.902196961393, 800, 763.9961167760671, 800.0, 800, 800.0, 800, 800, 762.5260362580339, 800.0, 800.0, 651.4226306357197, 800, 800, 639.5678088250767, 831.7315791386628, 800.0, 687.7994938798965, 825.7718988084277, 800, 800, 608.7776314618778, 800, 800, 800, 701.5504666505271, 800, 690.7587263423004, 800.0, 951.7131150782965, 800, 1216.3214259556019, 800, 799.9411636667874, 800, 760.6591005565169, 697.3378906062383, 1072.604374269954, 800, 800]
     
     best_score_ever=0
     best_ever_wts = [i for i in weights]
     lr = 0.5
     
-    for step in range(20):        
+    for step in range(100):        
         X_full_copy = X_full.copy()
 
         for i in range(len(weights)):
@@ -276,7 +290,8 @@ def gridSearch(clf,test_params):
 from mlxtend.classifier import StackingCVClassifier
 sclf = StackingCVClassifier(classifiers=[knn, rnf, etr, lrg],meta_classifier=lgb)
 
-print('5-fold cross validation:\n')
+print(' ')
+print('5-fold cross validation:')
 
 for clf, label in zip([knn, rnf, etr, lrg, sclf], 
                       ['Kneighbors','Random Forest', 'Extra Trees','Logistic Reg','StackingClf']):
