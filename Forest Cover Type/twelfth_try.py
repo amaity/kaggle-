@@ -43,9 +43,13 @@ def addFeatures(df):
     #df['Sum_of_shades'] = df[shades].sum(1)
     weights = pd.Series([0.299, 0.587, 0.114], index=cols)
     df['hillshade'] = (df[shades]*weights).sum(1)
+    #product of Hillshades
+    #df['interaction_9amnoon'] = df['Hillshade_9am']*df['Hillshade_Noon']
+    #df['interaction_noon3pm'] = df['Hillshade_Noon']*df['Hillshade_3pm']
+    #df['interaction_9am3pm'] = df['Hillshade_9am']*df['Hillshade_3pm']
 
     df['elevation_vdh'] = df['Elevation'] - df['Vertical_Distance_To_Hydrology']
-    #classifying elevation
+    """ #classifying elevation
     df['proba_Spruce'] = (df['Elevation'].isin(range(2500,3700))).astype(int)
     df['proba_Lodgepole'] = (df['Elevation'].isin(range(0,3500))).astype(int)
     df['proba_Ponderosa'] = (df['Elevation'].isin(range(0,3000))).astype(int)
@@ -55,7 +59,7 @@ def addFeatures(df):
     df['proba_Krummholz'] = (df['Elevation'].isin(range(2800,4000))).astype(int)
     cols = ['proba_Spruce','proba_Lodgepole','proba_Ponderosa','proba_Cottonwood',
             'proba_Aspen','proba_Douglas','proba_Krummholz']
-    df[cols] = df[cols].div(df[cols].sum(1), axis=0)
+    df[cols] = df[cols].div(df[cols].sum(1), axis=0) """
 
     print('Total number of features : %d' % (df.shape)[1])
     return df
@@ -104,45 +108,42 @@ def drop_unimportant(df):
     df_ = df_.drop(hi_freq_cols, axis='columns')
     return df_
 
-X = drop_unimportant(X)
-print(X.shape)
+#X = drop_unimportant(X)
+#feature_names = list(X.columns)
+#test = test[feature_names]
 #------------------------------------------------------------------------------
 def initialWeights(list_of_weights,list_of_col_names,col_name,weight):
     indices = [i for i, el in enumerate(list_of_col_names) if col_name in el]
     for idx in indices:
-        list_of_weights.insert(idx,wt)
-    return weights
+        list_of_weights[idx] = weight
+    return list_of_weights
 #------------------------------------------------------------------------------
 def getWeights(X_full, y_full):
     cols = list(X_full.columns.values)
     print(cols)
     #starting weights
     weights = [2]*X_full.shape[1]
-    weights = initialWeights(weights, 'Elevation', 10)
-    print(weights)
+    weights = initialWeights(weights, cols, 'Elevation', 11)
+    weights = initialWeights(weights, cols, 'Wilderness', 800)
+    weights = initialWeights(weights, cols, 'Soil', 800)
+    #weights = [11.0, 1.8966780735976558, 1.6120773615774247, 2.9104696920199613, 2.5006363482036824, 0.9871036869612939, 3.9071493085706535, 3.028610939074762, 2, 2, 2.5971335388285555, 1.95049626157544, 2, 2, 2, 2.064198730498835, 2, 2, 2, 1.4022139176731565, 1.8804240362084423, 2, 1.631559223024593, 1.678540466077829, 1.9104247503364242, 1.5786691390582834, 800, 696.6507031611867, 1101.681191354803, 705.7293768245202, 563.902196961393, 800, 763.9961167760671, 800.0, 800, 800.0, 800, 800, 762.5260362580339, 800.0, 800.0, 651.4226306357197, 800, 800, 639.5678088250767, 831.7315791386628, 800.0, 687.7994938798965, 825.7718988084277, 800, 800, 608.7776314618778, 800, 800, 800, 701.5504666505271, 800, 690.7587263423004, 800.0, 951.7131150782965, 800, 1216.3214259556019, 800, 799.9411636667874, 800, 760.6591005565169, 697.3378906062383, 1072.604374269954, 800, 800]
     
     best_score_ever=0
     best_ever_wts = [i for i in weights]
     lr = 0.5
     
-    for step in range(2):        
+    for step in range(20):        
         X_full_copy = X_full.copy()
 
-        for i in range(19):
+        for i in range(len(weights)):
             c = X_full.columns[i]
             X_full_copy[c] *= weights[i]
-        for i in range(19,23):
-            c = X_full.columns[i]
-            X_full_copy[c] *= weights[19]
-        for i in range(23,len(X_full.columns)):
-            c = X_full.columns[i]
-            X_full_copy[c] *= weights[20]
 
         r = lr*random.random()
         
         
         # Choose a random weight to change
-        train_index = random.randint(0,20)
+        train_index = random.randint(0,X_full.shape[1]-1)
         train_col = X_full.columns[train_index]
         
         # We will test four factors for changing the current weight.
@@ -153,16 +154,7 @@ def getWeights(X_full, y_full):
         best_wt=-1
 
         for wt in wts:  
-            if train_index<19:            
-                X_full_copy[train_col] = wt * X_full[train_col]
-            if train_index==19: 
-                for i in range(19,23):
-                    c = X_full.columns[i]
-                    X_full_copy[c] = wt*X_full[c]
-            if train_index > 19: 
-                for i in range(23,len(X_full.columns)):
-                    c = X_full.columns[i]
-                    X_full_copy[c] = wt*X_full[c]
+            X_full_copy[train_col] = wt * X_full[train_col]
 
             model = NearestNeighbors(n_neighbors=2, algorithm='ball_tree')
             distances, indices  = model.fit(X_full_copy).kneighbors(X_full_copy)
@@ -193,34 +185,22 @@ def getWeights(X_full, y_full):
 best_weights, final_weights = getWeights(X, y)
 print('Final weights: ',final_weights)
 weights = final_weights
-""" weights = [11.393577400361757, 1.4282825089634368, 0.6063107664752647, 1, 1.916980442614397, 
-1.0945477432742674, 1.668754279754504, 1.7520168478233817, 8.207420802921982, 
-0.7501841943847916, 1.9971420119714571, 2.72057743717325, 2.0, 1.575220244799055, 
-2.0695773922466643, 2.536316322049836, 0.46168425088806536, 0.4420755307264942, 
-10.660977569012896, 876.0230240897795, 795.52134403456] """
+
 #------------------------------------------------------------------------------
 from sklearn.neighbors import KNeighborsClassifier
 knn = KNeighborsClassifier(n_neighbors=1,p=1)
 
-def getWeights(X,test):
+def addWeights(X,test):
     X_copy = X.copy()
     test_copy = test.copy()
 
-    for i in range(19):
+    for i in range(len(X.columns)):
         c = X.columns[i]
-        X_copy[c] = weights[i]*X_copy[c]
-        test_copy[c] = weights[i]*test_copy[c]
-    for i in range(19,23):
-        c = X.columns[i]
-        X_copy[c] = weights[19]*X_copy[c]
-        test_copy[c] = weights[19]*test_copy[c]
-    for i in range(23,len(X.columns)):
-        c = X.columns[i]
-        X_copy[c] = weights[20]*X_copy[c]
-        test_copy[c] = weights[20]*test_copy[c]
+        X_copy[c] *= weights[i]
+        test_copy[c] *= weights[i]
     return X_copy, test_copy
 #------------------------------------------------------------------------------
-X_copy, test_copy = getWeights(X, test)
+X_copy, test_copy = addWeights(X, test)
 #------------------------------------------------------------------------------
 from sklearn import model_selection
 from sklearn.linear_model import LogisticRegression
@@ -242,10 +222,10 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 ##BaggingClassifier(DecisionTreeClassifier(max_leaf_nodes=2000), n_estimators=250,random_state=1)
 ##AdaBoostClassifier(base_estimator=RandomForestClassifier(), random_state=1)
 ##KNeighborsClassifier(n_neighbors=1)
-rnf = RandomForestClassifier(n_estimators=300, max_features='sqrt', bootstrap=False,max_depth=60,
+rnf = RandomForestClassifier(n_estimators=181, max_features='sqrt', bootstrap=False,max_depth=60,
                               min_samples_split=2,min_samples_leaf=1,random_state=1)
 etr = ExtraTreesClassifier(n_estimators=400,max_depth=50,min_samples_split=5,
-                             min_samples_leaf=1,max_features=63,random_state=1) 
+                             min_samples_leaf=1,max_features=X_copy.shape[1],random_state=1) 
 lgb = LGBMClassifier(objective='multiclass',num_class=7,learning_rate=0.2,num_leaves=149,random_state=1) #num_leaves=109,
 lrg = LogisticRegression(multi_class='multinomial', solver='newton-cg', random_state=1)
 #mlp = MLPClassifier(hidden_layer_sizes = [100]*5)
@@ -279,7 +259,8 @@ lr_param = {
 }
 
 def gridSearch(clf,test_params):
-    rs = RandomizedSearchCV(estimator=clf, param_distributions=test_params, scoring='accuracy', cv=3, verbose=3)
+    rs = RandomizedSearchCV(estimator=clf, param_distributions=test_params, 
+                                scoring='accuracy', cv=3, verbose=3)
     rs.fit(X_copy,y)
     print('-'*20)
     print('Best parameters: ',rs.best_params_)
@@ -289,16 +270,16 @@ def gridSearch(clf,test_params):
 #gridSearch(clf4, lgb_param)
 #------------------------------------------------------------------------------
 
-""" from mlxtend.classifier import StackingCVClassifier
-sclf = StackingCVClassifier(classifiers=[rnf, etr, lrg],meta_classifier=lgb)
+from mlxtend.classifier import StackingCVClassifier
+sclf = StackingCVClassifier(classifiers=[knn, rnf, etr, lrg],meta_classifier=lgb)
 
 print('5-fold cross validation:\n')
 
-for clf, label in zip([rnf, etr, lrg, sclf], 
-                      ['Random Forest', 'Extra Trees','Logistic Reg','StackingClf']):
+for clf, label in zip([knn, rnf, etr, lrg, sclf], 
+                      ['Kneighbors','Random Forest', 'Extra Trees','Logistic Reg','StackingClf']):
 
     scores = model_selection.cross_val_score(clf, X_copy.values, y.values, cv=5, scoring='accuracy')
-    print("Accuracy: %0.3f (+/- %0.2f) [%s]" % (scores.mean(), scores.std(), label)) """
+    print("Accuracy: %0.3f (+/- %0.2f) [%s]" % (scores.mean(), scores.std(), label))
 #------------------------------------------------------------------------------
 #sclf.fit(X_copy.values,y.values)
 #sclf_preds = sclf.predict(test_copy.values)
