@@ -61,6 +61,9 @@ def addFeatures(df):
             'proba_Aspen','proba_Douglas','proba_Krummholz']
     df[cols] = df[cols].div(df[cols].sum(1), axis=0) """
 
+    #slope
+    df["slope_times_elevation"] = df["Slope"] * df["Elevation"]
+
     print('Total number of features : %d' % (df.shape)[1])
     return df
 #------------------------------------------------------------------------------
