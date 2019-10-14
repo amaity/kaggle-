@@ -60,3 +60,20 @@ class PseudoLabeler(BaseEstimator, ClassifierMixin):
 
     def get_model_name(self):
         return self.model.__class__.__name__
+
+
+model_factory = [
+    XGBClassifier(nthreads=1),
+    PseudoLabeler(
+        XGBClassifier(nthreads=1),
+        test,
+        features,
+        target,sample_rate=0.3
+    ),
+]
+
+for model in model_factory:
+    model.seed = 42
+    num_folds = 8
+    scores = cross_val_score(model, X_train, y_train, cv=num_folds, scoring='neg_mean_squared_error', n_jobs=8)
+    score_description = "MSE: %0.4f (+/- %0.4f)" % (np.sqrt(scores.mean()*-1), scores.std() * 2)

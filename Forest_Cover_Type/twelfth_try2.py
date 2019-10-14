@@ -16,7 +16,6 @@ from heamy.pipeline import ModelsPipeline
 CACHE=False
 NFOLDS = 5
 #------------------------------------------------------------------------------
-#------------------------------------------------------------------------------
 def addFeatures(df):
     #horizontal and vertical distance to hydrology can be easily combined
     cols = ['Horizontal_Distance_To_Hydrology', 'Vertical_Distance_To_Hydrology']
