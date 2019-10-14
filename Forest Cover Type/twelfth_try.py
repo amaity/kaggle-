@@ -1,11 +1,12 @@
-import os, random
+import os, random, pickle
 import numpy as np 
 import pandas as pd
-from sklearn.preprocessing import normalize
+from sklearn.preprocessing import StandardScaler, normalize
 from sklearn.metrics import log_loss, accuracy_score
 from sklearn.model_selection import cross_val_score
 from sklearn.neighbors import NearestNeighbors
 from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
+from sklearn.decomposition import PCA
 import warnings
 warnings.simplefilter('ignore')
 #------------------------------------------------------------------------------
@@ -28,9 +29,17 @@ def addFeatures(df):
             'Horizontal_Distance_To_Hydrology']
     df['distance_mean'] = df[cols].mean(axis=1)
     df['distance_sum'] = df[cols].sum(axis=1)
+    df['distance_road_fire'] = df[cols[:2]].mean(axis=1)
+    df['distance_hydro_fire'] = df[cols[1:]].mean(axis=1)
+    df['distance_road_hydro'] = df[[cols[0], cols[2]]].mean(axis=1)
+    df['distance_sum_road_fire'] = df[cols[:2]].sum(axis=1)
+    df['distance_sum_hydro_fire'] = df[cols[1:]].sum(axis=1)
+    df['distance_sum_road_hydro'] = df[[cols[0], cols[2]]].sum(axis=1)
     df['distance_dif_road_fire'] = df[cols[0]] - df[cols[1]]
     df['distance_dif_hydro_road'] = df[cols[2]] - df[cols[0]]
     df['distance_dif_hydro_fire'] = df[cols[2]] - df[cols[1]]
+    df['vertical_dif'] = df['Elevation'] - df['Vertical_Distance_To_Hydrology']
+    df['vertical_sum'] = df['Elevation'] + df['Vertical_Distance_To_Hydrology']
     
     #taking some factors influencing the amount of radiation
     df['cosine_of_slope'] = np.cos(np.radians(df['Slope']) )
@@ -43,14 +52,14 @@ def addFeatures(df):
     #df['Sum_of_shades'] = df[shades].sum(1)
     weights = pd.Series([0.299, 0.587, 0.114], index=cols)
     df['hillshade'] = (df[shades]*weights).sum(1)
-    #product of Hillshades
-    #df['interaction_9amnoon'] = df['Hillshade_9am']*df['Hillshade_Noon']
-    #df['interaction_noon3pm'] = df['Hillshade_Noon']*df['Hillshade_3pm']
-    #df['interaction_9am3pm'] = df['Hillshade_9am']*df['Hillshade_3pm']
-
-    df['elevation_vdh'] = df['Elevation'] - df['Vertical_Distance_To_Hydrology']
-    """ #classifying elevation
-    df['proba_Spruce'] = (df['Elevation'].isin(range(2500,3700))).astype(int)
+    df['shade_noon_diff'] = df['Hillshade_9am'] - df['Hillshade_Noon']
+    df['shade_3pm_diff'] = df['Hillshade_Noon'] - df['Hillshade_3pm']
+    df['shade_all_diff'] = df['Hillshade_9am'] - df['Hillshade_3pm']
+    df['shade_mean'] = df[shades].mean(axis=1)
+    
+    
+    #classifying elevation
+    """ df['proba_Spruce'] = (df['Elevation'].isin(range(2500,3700))).astype(int)
     df['proba_Lodgepole'] = (df['Elevation'].isin(range(0,3500))).astype(int)
     df['proba_Ponderosa'] = (df['Elevation'].isin(range(0,3000))).astype(int)
     df['proba_Cottonwood'] = (df['Elevation'].isin(range(1500,2600))).astype(int)
@@ -67,9 +76,9 @@ def addFeatures(df):
     #binned features
     bin_defs = [
         # col name, bin size, new name
-        ('Elevation', 200, 'Binned_Elevation'), 
-        ('Aspect', 45, 'Binned_Aspect'),
-        ('Slope', 6, 'Binned_Slope'),
+        ('Elevation', 200, 'binned_elevation'), 
+        ('Aspect', 45, 'binned_aspect'),
+        ('Slope', 6, 'binned_slope'),
     ]
     
     for col_name, bin_size, new_name in bin_defs:
@@ -101,8 +110,8 @@ def preprocessData(train, test):
     dtst_added_features = test.loc[:,'distance_to_hydrology':]
     dtst_ = pd.concat([dtst_first_ten,dtst_added_features,dtst_wa_st],axis=1)
     
-    train.loc[:,:'Binned_Slope'] = normalize(train.loc[:,:'Binned_Slope'])
-    test.loc[:,:'Binned_Slope'] = normalize(test.loc[:,:'Binned_Slope'])
+    train.loc[:,:'shade_mean'] = normalize(train.loc[:,:'shade_mean'])
+    test.loc[:,:'shade_mean'] = normalize(test.loc[:,:'shade_mean'])
     
     # elevation was found to have very different distributions on test and training sets
     # lets just drop it for now to see if we can implememnt a more robust classifier!
@@ -139,17 +148,22 @@ def getWeights(X_full, y_full):
     cols = list(X_full.columns.values)
     print(cols)
     #starting weights
-    weights = [1]*X_full.shape[1]
-    weights = initialWeights(weights, cols, 'Elevation', 11)
-    weights = initialWeights(weights, cols, 'Wilderness', 400)
-    weights = initialWeights(weights, cols, 'Soil', 400)
-    #weights = [11.0, 1.8966780735976558, 1.6120773615774247, 2.9104696920199613, 2.5006363482036824, 0.9871036869612939, 3.9071493085706535, 3.028610939074762, 2, 2, 2.5971335388285555, 1.95049626157544, 2, 2, 2, 2.064198730498835, 2, 2, 2, 1.4022139176731565, 1.8804240362084423, 2, 1.631559223024593, 1.678540466077829, 1.9104247503364242, 1.5786691390582834, 800, 696.6507031611867, 1101.681191354803, 705.7293768245202, 563.902196961393, 800, 763.9961167760671, 800.0, 800, 800.0, 800, 800, 762.5260362580339, 800.0, 800.0, 651.4226306357197, 800, 800, 639.5678088250767, 831.7315791386628, 800.0, 687.7994938798965, 825.7718988084277, 800, 800, 608.7776314618778, 800, 800, 800, 701.5504666505271, 800, 690.7587263423004, 800.0, 951.7131150782965, 800, 1216.3214259556019, 800, 799.9411636667874, 800, 760.6591005565169, 697.3378906062383, 1072.604374269954, 800, 800]
+    if os.path.isfile("weights.pickle"):
+        with open( "weights.pickle", "rb" ) as f:
+            w = pickle.load(f)
+            if len(w) == X_full.shape[1]:
+                weights = w
+    else:
+        weights = [1]*X_full.shape[1]
+        weights = initialWeights(weights, cols, 'Elevation', 8)
+        weights = initialWeights(weights, cols, 'Wilderness', 400)
+        weights = initialWeights(weights, cols, 'Soil', 400)
     
     best_score_ever=0
     best_ever_wts = [i for i in weights]
     lr = 0.5
     
-    for step in range(100):        
+    for step in range(15):        
         X_full_copy = X_full.copy()
 
         for i in range(len(weights)):
@@ -202,7 +216,8 @@ def getWeights(X_full, y_full):
 best_weights, final_weights = getWeights(X, y)
 print('Final weights: ',final_weights)
 weights = final_weights
-
+with open('weights.pickle', 'wb') as fh1:
+        pickle.dump(weights, fh1)
 #------------------------------------------------------------------------------
 from sklearn.neighbors import KNeighborsClassifier
 knn = KNeighborsClassifier(n_neighbors=1,p=1)
@@ -219,6 +234,29 @@ def addWeights(X,test):
 #------------------------------------------------------------------------------
 X_copy, test_copy = addWeights(X, test)
 #------------------------------------------------------------------------------
+pca = PCA()
+pca.fit(X_copy)
+
+#Transforming x_train and x_test 
+x_train_pca = pca.transform(X_copy)
+#x_test_pca = pca.transform(x_test)
+
+#Find number of components that explain predefined variance threshold
+sum_variance, component_count = 0, 0
+while sum_variance < 0.85:
+    sum_variance += pca.explained_variance_ratio_[component_count]
+    component_count += 1
+
+print('-'*20)    
+print('Number of Principal Components that explain >=85% of Variance: ', component_count)
+print('Total Variance Explained by '+str(component_count)+' components:', str(sum_variance*100)+'%')
+#------------------------------------------------------------------------------
+pca = PCA(n_components=2)
+pca.fit(X_copy)
+
+#Transforming x_train and x_test 
+x_train_pca = pca.transform(X_copy)
+#------------------------------------------------------------------------------
 from sklearn import model_selection
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
@@ -229,9 +267,10 @@ from lightgbm import LGBMClassifier
 from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier, \
     AdaBoostClassifier
 from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
-from sklearn.multiclass import OneVsRestClassifier
-#from sklearn.neural_network import MLPClassifier
+from sklearn.neural_network import MLPClassifier
 from sklearn.svm import SVC
+#import xgboost as xgb
+
 import os
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
@@ -241,12 +280,11 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 ##KNeighborsClassifier(n_neighbors=1)
 rnf = RandomForestClassifier(n_estimators=181, max_features='sqrt', bootstrap=False,max_depth=60,
                               min_samples_split=2,min_samples_leaf=1,random_state=1)
-etr = ExtraTreesClassifier(n_estimators=400,max_depth=50,min_samples_split=5,
-                             min_samples_leaf=1,max_features=X_copy.shape[1],random_state=1) 
-lgb = LGBMClassifier(objective='multiclass',num_class=7,learning_rate=0.2,num_leaves=149,random_state=1) #num_leaves=109,
-lrg = LogisticRegression(multi_class='multinomial', solver='newton-cg', random_state=1)
-#mlp = MLPClassifier(hidden_layer_sizes = [100]*5)
-svm = SVC(decision_function_shape='ovr')
+etr = ExtraTreesClassifier(n_estimators=500,max_features=X_copy.shape[1],min_samples_split=5,min_samples_leaf=1,random_state=1) 
+lgb = LGBMClassifier(objective='multiclass',num_class=7,learning_rate=0.2,num_leaves=X_copy.shape[1],random_state=1) #num_leaves=109,
+lrg = LogisticRegression(C=1000,multi_class='multinomial', solver='newton-cg', random_state=1)
+mlp = MLPClassifier(activation='logistic',max_iter=500)
+#xgb = xgb.XGBClassifier(objective='multi:softmax')
 #------------------------------------------------------------------------------
 rf_param = {    
     'n_estimators': [250, 300, 350, 400],
@@ -262,6 +300,7 @@ et_param = {
     'max_features': ['auto','sqrt','log2',None],
     'min_samples_leaf': [1,2,4],
     'min_samples_split': [2,5,10],
+    'max_depth': [75,100,125,150]
     }
 
 lgb_param = {
@@ -275,6 +314,14 @@ lr_param = {
     'C': [0.001, 0.01, 0.1, 1, 10, 100, 1000],
 }
 
+mlp_param = {
+    'hidden_layer_sizes': [(66,66), (132,), (198,)],
+    'activation': ['tanh', 'relu'],
+    'solver': ['sgd', 'adam'],
+    'alpha': [0.001, 0.05, 0.5],
+    'learning_rate': ['constant','adaptive'],
+}
+
 def gridSearch(clf,test_params):
     rs = RandomizedSearchCV(estimator=clf, param_distributions=test_params, 
                                 scoring='accuracy', cv=3, verbose=3)
@@ -284,17 +331,18 @@ def gridSearch(clf,test_params):
     print('Best score: ',rs.best_score_)
     print('-'*20)
 
-#gridSearch(clf4, lgb_param)
+#gridSearch(mlp, mlp_param)
 #------------------------------------------------------------------------------
 
 from mlxtend.classifier import StackingCVClassifier
-sclf = StackingCVClassifier(classifiers=[knn, rnf, etr, lrg],meta_classifier=lgb)
+lr1 = LogisticRegression(C=5, random_state=1, solver='liblinear', multi_class= 'ovr')
+sclf = StackingCVClassifier(classifiers=[knn,rnf,etr],meta_classifier=lgb)
 
-print(' ')
+print('-'*20)
 print('5-fold cross validation:')
 
-for clf, label in zip([knn, rnf, etr, lrg, sclf], 
-                      ['Kneighbors','Random Forest', 'Extra Trees','Logistic Reg','StackingClf']):
+for clf, label in zip([knn,rnf,etr,sclf], 
+                      ['Kneighbors','Random Forest','Extra Trees','StackingClf']):
 
     scores = model_selection.cross_val_score(clf, X_copy.values, y.values, cv=5, scoring='accuracy')
     print("Accuracy: %0.3f (+/- %0.2f) [%s]" % (scores.mean(), scores.std(), label))
@@ -303,3 +351,4 @@ for clf, label in zip([knn, rnf, etr, lrg, sclf],
 #sclf_preds = sclf.predict(test_copy.values)
 #print(sclf_preds[:10])
 #------------------------------------------------------------------------------
+
