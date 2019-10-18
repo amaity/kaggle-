@@ -5,6 +5,7 @@ from sklearn.preprocessing import normalize
 from sklearn.metrics import log_loss, accuracy_score
 from sklearn.model_selection import cross_val_score
 from sklearn.neighbors import NearestNeighbors
+from sklearn.preprocessing import Imputer
 import warnings
 warnings.simplefilter('ignore')
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
@@ -135,7 +136,9 @@ while score <= 0.83:
     predictions = preds
     test_copy['Cover_Type'] = predictions
     pseudo = test_copy.sample(frac=0.25, random_state=1)
-    pseudo = pseudo.dropna()
+    imp = Imputer(missing_values=np.nan, strategy='mean')
+    imp = imp.fit(pseudo)
+    pseudo = imp.transform(pseudo)
     aug_train = pd.concat([X_copy,pseudo.iloc[:,:-1]], axis=1)
     aug_y = pd.concat([y,pseudo.iloc[:,-1]])
     score, preds = votingEnsemble(aug_train,test_copy.iloc[:,:-1],aug_y)
