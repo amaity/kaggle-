@@ -208,7 +208,6 @@ xgf = Classifier(dataset=dataset, estimator=XGBClassifier, use_cache=CACHE, para
 #Stack the models and returns new dataset with out-of-fold predictions
 pipeline = ModelsPipeline(knn, rf, et, lgb, lr) 
 stack_ds = pipeline.stack(k=NFOLDS,seed=1)
-print(stack_ds.X_train.shape,stack_ds.X_test.shape)
 #------------------------------------------------------------------------------
 dtrain = xgb.DMatrix(stack_ds.X_train, label=stack_ds.y_train)
 dtest = xgb.DMatrix(stack_ds.X_test)
@@ -231,9 +230,9 @@ res = xgb.cv(xgb_params, dtrain, num_boost_round=1000,
              nfold=NFOLDS, seed=1, stratified=True,
              early_stopping_rounds=20, verbose_eval=5, show_stdv=True)
 
-best_nrounds = res.shape[0] - 1
-cv_mean = res.iloc[-1, 2]
-cv_std = res.iloc[-1, 3]
+#best_nrounds = res.shape[0] - 1
+#cv_mean = res.iloc[-1, 2]
+#cv_std = res.iloc[-1, 3]
 
 #print('Ensemble-CV: {0}+{1}, best nrounds = {2}'.format(cv_mean, cv_std, best_nrounds))
 #------------------------------------------------------------------------------
@@ -248,6 +247,7 @@ while cv_mean >= 0.265:
     model = xgb.train(xgb_params, dtrain, best_nrounds)
     xpreds = model.predict(dtest)
     predictions = np.round(np.argmax(xpreds, axis=1)).astype(int)
+    print(predictions.shape, stack_ds.X_test.shape)
     aug_test = np.hstack((stack_ds.X_test,predictions))
     pseudo = aug_test.sample(frac=0.25, random_state=1)
     aug_train = np.vstack((stack_ds.X_train,pseudo[:,:-1]))
