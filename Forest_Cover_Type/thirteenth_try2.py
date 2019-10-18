@@ -1,4 +1,4 @@
-import os, random
+import os, random, sys
 import numpy as np 
 import pandas as pd
 from sklearn.preprocessing import normalize
@@ -11,7 +11,9 @@ warnings.simplefilter('ignore')
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 #------------------------------------------------------------------------------
 train = pd.read_csv('train.csv', index_col='Id')
+print('train data shape:'train.shape)
 test = pd.read_csv('test.csv', index_col='Id')
+print('test data shape:'test.shape)
 #------------------------------------------------------------------------------
 def addFeatures(df):
     #horizontal and vertical distance to hydrology can be easily combined
@@ -42,6 +44,10 @@ def addFeatures(df):
     df['elevation_vdh'] = df['Elevation'] - df['Vertical_Distance_To_Hydrology']
     print('Total number of features : %d' % (df.shape)[1])
     return df
+#------------------------------------------------------------------------------
+#missing_values = test.isnull().sum()
+#print('Missing values in test data: ',missing_values)
+#sys.exit("Error message")
 #------------------------------------------------------------------------------
 
 def preprocessData(train, test):
@@ -135,18 +141,18 @@ while score <= 0.83:
     print('it',it)
     predictions = preds
     test_copy['Cover_Type'] = predictions
-    pseudo = test_copy.sample(frac=0.25, random_state=1)
+    pseudo = test_copy.sample(frac=0.1, random_state=1)
     imp = Imputer(missing_values=np.nan, strategy='mean')
     imp = imp.fit(pseudo)
     pseudo = imp.transform(pseudo)
-    aug_train = pd.concat([X_copy,pseudo.iloc[:,:-1]], axis=1)
-    aug_y = pd.concat([y,pseudo.iloc[:,-1]])
-    score, preds = votingEnsemble(aug_train,test_copy.iloc[:,:-1],aug_y)
+    aug_train = np.vstack((X_copy.values,pseudo[:,:-1]))
+    aug_y = np.concatenate((y.values,pseudo[:,-1]),axis=0)
+    score, _ = votingEnsemble(aug_train,test_copy.iloc[:,:-1].values,aug_y)
     model = eclf.fit(aug_train,aug_y)
     predictions = model.predict(test_copy)
     it += 1
-    
- 
+   
+
 
 
 
