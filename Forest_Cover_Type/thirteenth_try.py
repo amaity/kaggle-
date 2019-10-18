@@ -248,6 +248,7 @@ while cv_mean >= 0.265:
     model = xgb.train(xgb_params, dtrain, best_nrounds)
     xpreds = model.predict(dtest)
     predictions = np.round(np.argmax(xpreds, axis=1)).astype(int)
+    print(predictions.shape)
     aug_test = np.hstack((stack_ds.X_test,predictions))
     pseudo = aug_test.sample(frac=0.25, random_state=1)
     aug_train = np.vstack((stack_ds.X_train,pseudo[:,:-1]))
