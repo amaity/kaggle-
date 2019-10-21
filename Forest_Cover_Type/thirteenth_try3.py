@@ -1,19 +1,16 @@
-import os, random, sys
-import numpy as np 
-import pandas as pd
+import numpy as np, pandas as pd, os
+from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
+from sklearn.model_selection import StratifiedKFold
+from sklearn.feature_selection import VarianceThreshold
+from sklearn.metrics import roc_auc_score
 from sklearn.preprocessing import normalize
-from sklearn.metrics import log_loss, accuracy_score
-from sklearn.model_selection import cross_val_score
-from sklearn.neighbors import NearestNeighbors
-from sklearn.preprocessing import Imputer
-import warnings
-warnings.simplefilter('ignore')
-os.environ['KMP_DUPLICATE_LIB_OK']='True'
+
 #------------------------------------------------------------------------------
 train = pd.read_csv('train.csv', index_col='Id')
 print('train data shape:',train.shape)
 test = pd.read_csv('test.csv', index_col='Id')
 print('test data shape:',test.shape)
+print(train.groupby('Cover_Type')['Elevation'].count())
 #------------------------------------------------------------------------------
 def addFeatures(df):
     #horizontal and vertical distance to hydrology can be easily combined
@@ -71,6 +68,9 @@ def preprocessData(train, test):
     dtst_wa_st = test.loc[:,'Wilderness_Area1':'Soil_Type40']
     dtst_added_features = test.loc[:,'distance_to_hydrology':]
     dtst_ = pd.concat([dtst_first_ten,dtst_added_features,dtst_wa_st],axis=1)
+
+    train.loc[:,:'elevation_vdh'] = normalize(train.loc[:,:'elevation_vdh'])
+    test.loc[:,:'elevation_vdh'] = normalize(test.loc[:,:'elevation_vdh'])
     
     # elevation was found to have very different distributions on test and training sets
     # lets just drop it for now to see if we can implememnt a more robust classifier!
@@ -80,63 +80,38 @@ def preprocessData(train, test):
     return dtrn_, dtst_, y_train
 #------------------------------------------------------------------------------
 X, test, y = preprocessData(train, test)
+print('X data shape:',X.shape)
+print('test data shape:',test.shape)
+print('y data shape:',y.shape)
 #------------------------------------------------------------------------------
-weights = [11.393577400361757, 1.4282825089634368, 0.6063107664752647, 1, 1.916980442614397, 
-1.0945477432742674, 1.668754279754504, 1.7520168478233817, 8.207420802921982, 
-0.7501841943847916, 1.9971420119714571, 2.72057743717325, 2.0, 1.575220244799055, 
-2.0695773922466643, 2.536316322049836, 0.46168425088806536, 0.4420755307264942, 
-10.660977569012896, 876.0230240897795, 795.52134403456]
+losses , accuracies = [], []
+cols = [c for c in train.columns if c not in ['Id', 'Cover_Type']]
+oof = np.zeros(len(train))
+pred = np.zeros(len(test))
+
+skf = StratifiedKFold(n_splits=11, random_state=1)
+for train_index, test_index in skf.split(X,y):
+    clf = QuadraticDiscriminantAnalysis()
+    clf.fit(X.iloc[train_index],y.iloc[train_index])
+    pred += clf.predict(X.iloc[test_index])
+
+from sklearn.metrics import classification_report
+print(classification_report(y, pred))
 #------------------------------------------------------------------------------
-
-from sklearn.neighbors import KNeighborsClassifier
-clf1 = KNeighborsClassifier(n_neighbors=1,p=1)
-
-X_copy = X.copy()
-#test_copy = test.copy()
-
-for i in range(19):
-    c = X.columns[i]
-    X_copy[c] *= weights[i]
-    test[c] *= weights[i]
-for i in range(19,23):
-    c = X.columns[i]
-    X_copy[c] *= weights[19]
-    test[c] *= weights[19]
-for i in range(23,len(X.columns)):
-    c = X.columns[i]
-    X_copy[c] *= weights[20]
-    test[c] *= weights[20]
-
-#------------------------------------------------------------------------------
-
-from sklearn.ensemble import RandomForestClassifier
-clf2 = RandomForestClassifier(n_estimators=300, max_features='sqrt', bootstrap=False,max_depth=60,
-                              min_samples_split=2,min_samples_leaf=1,random_state=1)
-from sklearn.ensemble import ExtraTreesClassifier
-clf3 = ExtraTreesClassifier(n_estimators=400,max_depth=50,min_samples_split=5,
-                             min_samples_leaf=1,max_features=63,random_state=1)
-from lightgbm import LGBMClassifier
-clf4 = LGBMClassifier(num_leaves=109,objective='multiclass',num_class=7,
-                       learning_rate=0.2,random_state=1)
+from sklearn.preprocessing import LabelBinarizer
+from sklearn.metrics import roc_auc_score
+def multiclass_roc_auc_score(test, pred, average='macro'):
+    lb = LabelBinarizer()
+    lb.fit(test)
+    test = lb.transform(test)
+    pred = lb.transform(pred)
+    return roc_auc_score(test, pred, average=average)
 
 #------------------------------------------------------------------------------
-from mlxtend.classifier import EnsembleVoteClassifier
-eclf = EnsembleVoteClassifier(clfs=[clf1, clf2, clf3, clf4])
-labels = ['KNeighbors', 'Random Forest', 'Extra Trees', 'LGBM', 'Ensemble']
-
-def votingEnsemble(X,y):
-    for clf, label in zip([clf1, clf2, clf3, clf4, eclf], labels):
-        scores = cross_val_score(clf, X, y, cv=5, scoring='accuracy')
-        print("Accuracy: %0.3f (+/- %0.2f) [%s]" % (scores.mean(), scores.std(), label))
-    model = eclf.fit(X,y)
-    #preds_test = eclf.predict(test_copy)
-    return scores.mean(), model
-
+auc = multiclass_roc_auc_score(y,pred)
+print('QDA scores CV =',round(auc,5))
 #------------------------------------------------------------------------------
-score, model = votingEnsemble(X_copy,y)
-preds = model.predict(test)
-#------------------------------------------------------------------------------
-d, it, score = 0, 0, 0.1
+""" d, it, score = 0, 0, 0.1
 predictions = preds
 test_copy = test.copy()
 
@@ -153,7 +128,5 @@ while score <= 0.95:
     it += 1
 
    
-print(predictions[:10])
-
-
+print(predictions[:10]) """
 
