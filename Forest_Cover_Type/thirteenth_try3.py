@@ -89,14 +89,13 @@ cols = [c for c in train.columns if c not in ['Id', 'Cover_Type']]
 oof = np.zeros(len(train))
 pred = np.zeros(len(test))
 
-skf = StratifiedKFold(n_splits=11, random_state=1)
-for train_index, test_index in skf.split(X,y):
-    clf = QuadraticDiscriminantAnalysis()
-    clf.fit(X.iloc[train_index],y.iloc[train_index])
-    pred += clf.predict(X.iloc[test_index])
-
-from sklearn.metrics import classification_report
-print(classification_report(y, pred))
+# BUILD MODELS OF EACH CATEGORY
+for i in range(7):
+    # ONLY TRAIN WITH DATA WHERE WHEEZY EQUALS I
+    train2 = train[train['Cover_Type']==i+1]
+    test2 = test[test['wheezy-copper-turtle-magic']==i]
+    idx1 = train2.index; idx2 = test2.index
+    train2.reset_index(drop=True,inplace=True)
 #------------------------------------------------------------------------------
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.metrics import roc_auc_score
