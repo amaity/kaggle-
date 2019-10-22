@@ -84,18 +84,46 @@ print('X data shape:',X.shape)
 print('test data shape:',test.shape)
 print('y data shape:',y.shape)
 #------------------------------------------------------------------------------
+from sklearn.ensemble import RandomForestClassifier
+
+#------------------------------------------------------------------------------
+X['wa'] = np.argmax(X[['Wilderness_Area1','Wilderness_Area2','Wilderness_Area3',
+                        'Wilderness_Area4']].values,axis=1)
+print(X['wa'].unique())
+test['wa'] = np.argmax(test[['Wilderness_Area1','Wilderness_Area2','Wilderness_Area3',
+                        'Wilderness_Area4']].values,axis=1)
 losses , accuracies = [], []
-cols = [c for c in train.columns if c not in ['Id', 'Cover_Type']]
-oof = np.zeros(len(train))
+cols = [c for c in X.columns if c not in ['Id', 'Cover_Type']]
+cols = [c for c in cols if c not in ['Wilderness_Area1','Wilderness_Area2',
+                                'Wilderness_Area3','Wilderness_Area4','wa']]
+oof = np.zeros(len(X))
 pred = np.zeros(len(test))
 
 # BUILD MODELS OF EACH CATEGORY
-for i in range(7):
-    # ONLY TRAIN WITH DATA WHERE WHEEZY EQUALS I
-    train2 = train[train['Cover_Type']==i+1]
-    test2 = test[test['wheezy-copper-turtle-magic']==i]
+for i in range(4):
+    print('Wilderness_Area:',i)
+    # ONLY TRAIN WITH DATA WHERE WILDERNESS_AREA EQUALS I
+    train2 = X[X['wa']==i]
+    y2 = y[y.index.isin(train2.index)]
+    test2 = test[test['wa']==i]
     idx1 = train2.index; idx2 = test2.index
     train2.reset_index(drop=True,inplace=True)
+
+    # FEATURE SELECTION 
+    sel = VarianceThreshold(threshold=1.5).fit(train2[cols])
+    train3 = sel.transform(train2[cols])
+    print('train3 shape:',train3.shape)
+    test3 = sel.transform(test2[cols])
+    print('test3 shape:',test3.shape)
+
+    # STRATIFIED K-FOLD
+    skf = StratifiedKFold(n_splits=11, random_state=1, shuffle=True)
+    for train_index, test_index in skf.split(train3,y2):
+        # MODEL AND PREDICT WITH QDA
+        clf = QuadraticDiscriminantAnalysis()
+        clf.fit(train3[train_index,:],y2.iloc[train_index])
+        oof[idx1[test_index]] = clf.predict_proba(train3[test_index,:])
+        pred[idx2] += clf.predict_proba(test3) / skf.n_splits
 #------------------------------------------------------------------------------
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.metrics import roc_auc_score
