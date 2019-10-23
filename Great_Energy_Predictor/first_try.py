@@ -1,7 +1,7 @@
 import numpy as np # linear algebra
 import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
 # Suppress warnings 
-import warnings
+import sys, warnings
 warnings.filterwarnings('ignore')
 import gc
 
@@ -11,78 +11,57 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import matplotlib.patches as patches
 #------------------------------------------------------------------------------
-train = pd.read_csv('train.csv')
-print('train:',train.shape)
-test = pd.read_csv('test.csv')
-print('test:',test.shape)
-weather_train = pd.read_csv('weather_train.csv')
-print('weather_train:',weather_train.shape)
-weather_test = pd.read_csv('weather_test.csv')
-print('weather_test:',weather_test.shape)
+#https://hackersandslackers.com/downcast-numerical-columns-python-pandas/
+print('train data:');print('-'*20)
+train = pd.read_csv('train.csv', parse_dates=['timestamp'],
+                    dtype={'building_id':np.uint16, 'meter':np.uint8, 'meter_reading':np.float64})
+print(train.info(memory_usage='deep'))
+#------------------------------------------------------------------------------
+print('test data:');print('-'*20)
+test = pd.read_csv('test.csv', parse_dates=['timestamp'],
+                   dtype={'row_id':np.uint16,'building_id':np.uint16,'meter':np.uint16})
+print(test.info(memory_usage='deep'))
+#------------------------------------------------------------------------------
+print('weather_train data:');print('-'*20)
+weather_train = pd.read_csv('weather_train.csv',dtype={'site_id':np.uint16})
+weather_train['timestamp'] = pd.to_datetime(weather_train['timestamp'],infer_datetime_format=True)
+weather_train[['air_temperature', 'cloud_coverage',
+       'dew_temperature', 'precip_depth_1_hr', 'sea_level_pressure',
+       'wind_direction', 'wind_speed']] = weather_train[['air_temperature', 'cloud_coverage',
+       'dew_temperature', 'precip_depth_1_hr', 'sea_level_pressure',
+       'wind_direction', 'wind_speed']].apply(pd.to_numeric,downcast='float')
+print(weather_train.info(memory_usage='deep'))
+#------------------------------------------------------------------------------
+print('weather_test data:');print('-'*20)
+weather_test = pd.read_csv('weather_test.csv',dtype={'site_id':np.uint16})
+weather_test['site_id'] = weather_test['site_id'].apply(pd.to_numeric,downcast='unsigned')
+weather_test['timestamp'] = pd.to_datetime(weather_test['timestamp'],infer_datetime_format=True)
+weather_test[['air_temperature', 'cloud_coverage',
+       'dew_temperature', 'precip_depth_1_hr', 'sea_level_pressure',
+       'wind_direction', 'wind_speed']] = weather_test[['air_temperature', 'cloud_coverage',
+       'dew_temperature', 'precip_depth_1_hr', 'sea_level_pressure',
+       'wind_direction', 'wind_speed']].apply(pd.to_numeric,downcast='float')
+print(weather_test.info(memory_usage='deep'))
+#------------------------------------------------------------------------------
+print('building_metadata data:');print('-'*20)
 building_metadata = pd.read_csv('building_metadata.csv')
-print('building_metadata:',building_metadata.shape)
+building_metadata['primary_use'] = building_metadata['primary_use'].astype('category')
+print(building_metadata.info(memory_usage='deep'))
+#------------------------------------------------------------------------------
 sample_submission = pd.read_csv('sample_submission.csv')
 print('sample_submission:',sample_submission.shape)
 #------------------------------------------------------------------------------
-print('train columns:\n',train.dtypes)
-print('test columns:\n',train.dtypes)
-print('weather_train columns:\n',weather_train.dtypes)
-print('weather_test columns:\n',weather_test.dtypes)
-print('building_metadata columns:\n',building_metadata.dtypes)
+plt.figure(figsize = (15,5))
+train['meter_reading'].plot()
+plt.show()
 #------------------------------------------------------------------------------
-#ripped from here:
-#https://www.kaggle.com/caesarlupum/ashrae-start-here-a-gentle-introduction#Reducing-Memory-Size
-
-def reduce_mem_usage(df, verbose=True):
-    numerics = ['int16', 'int32', 'int64', 'float16', 'float32', 'float64']
-    start_mem = df.memory_usage().sum() / 1024**2    
-    for col in df.columns:
-        col_type = df[col].dtypes
-        if col_type in numerics:
-            c_min = df[col].min()
-            c_max = df[col].max()
-            if str(col_type)[:3] == 'int':
-                if c_min > np.iinfo(np.int8).min and c_max < np.iinfo(np.int8).max:
-                    df[col] = df[col].astype(np.int8)
-                elif c_min > np.iinfo(np.int16).min and c_max < np.iinfo(np.int16).max:
-                    df[col] = df[col].astype(np.int16)
-                elif c_min > np.iinfo(np.int32).min and c_max < np.iinfo(np.int32).max:
-                    df[col] = df[col].astype(np.int32)
-                elif c_min > np.iinfo(np.int64).min and c_max < np.iinfo(np.int64).max:
-                    df[col] = df[col].astype(np.int64)  
-            else:
-                if c_min > np.finfo(np.float16).min and c_max < np.finfo(np.float16).max:
-                    df[col] = df[col].astype(np.float16)
-                elif c_min > np.finfo(np.float32).min and c_max < np.finfo(np.float32).max:
-                    df[col] = df[col].astype(np.float32)
-                else:
-                    df[col] = df[col].astype(np.float64)    
-    end_mem = df.memory_usage().sum() / 1024**2
-    if verbose: print('Mem. usage decreased to {:5.2f} Mb ({:.1f}% reduction)'.format(end_mem, 100 * (start_mem - end_mem) / start_mem))
-    return df
+total = train.isnull().sum().sort_values(ascending = False)
+percent = (train.isnull().sum()/train.isnull().count()*100).sort_values(ascending = False)
+missing_train_data  = pd.concat([total, percent], axis=1, keys=['Total', 'Percent'])
+print(missing_train_data.head())
 #------------------------------------------------------------------------------
-train = reduce_mem_usage(train)
-test = reduce_mem_usage(test)
-
-weather_train = reduce_mem_usage(weather_train)
-weather_test = reduce_mem_usage(weather_test)
-building_metadata = reduce_mem_usage(building_metadata)
+total = weather_train.isnull().sum().sort_values(ascending = False)
+percent = (weather_train.isnull().sum()/weather_train.isnull().count()*100).sort_values(ascending = False)
+missing_weather_data  = pd.concat([total, percent], axis=1, keys=['Total', 'Percent'])
+print(missing_weather_data.head(9))
 #------------------------------------------------------------------------------
-train['timestamp'] = pd.to_datetime(train['timestamp'])
-test['timestamp'] = pd.to_datetime(test['timestamp'])
-weather_train['timestamp'] = pd.to_datetime(weather_train['timestamp'])
-weather_test['timestamp'] = pd.to_datetime(weather_test['timestamp'])
-#------------------------------------------------------------------------------
-building_metadata['primary_use'] = building_metadata['primary_use'].astype('category')
-
-temp_df = train_df[['building_id']]
-temp_df = temp_df.merge(building_meta_df, on=['building_id'], how='left')
-del temp_df['building_id']
-train_df = pd.concat([train_df, temp_df], axis=1)
-
-temp_df = test_df[['building_id']]
-temp_df = temp_df.merge(building_meta_df, on=['building_id'], how='left')
-
-del temp_df['building_id']
-test_df = pd.concat([test_df, temp_df], axis=1)
-del temp_df, building_meta_df
