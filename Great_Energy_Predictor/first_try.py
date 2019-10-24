@@ -11,6 +11,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import matplotlib.patches as patches
 #------------------------------------------------------------------------------
+#import zipfile
+#with zipfile.ZipFile('ashrae-energy-prediction.zip', 'r') as zipf:
+#    zipf.extractall('.')
+#------------------------------------------------------------------------------
 #https://hackersandslackers.com/downcast-numerical-columns-python-pandas/
 print('train data:');print('-'*20)
 train = pd.read_csv('train.csv', parse_dates=['timestamp'],
