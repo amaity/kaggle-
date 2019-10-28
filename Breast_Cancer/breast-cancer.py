@@ -199,6 +199,7 @@ https://gist.github.com/mazieres/10459516
 https://github.com/mazieres/analysis/blob/master/analysis.py
 https://thehongwudotcom.wordpress.com/2016/02/28/biplot-in-python-optimized-with-color-scatter-plot/
 https://stackoverflow.com/questions/22348668/pca-decomposition-with-python-features-relevances
+https://github.com/mazieres/analysis/blob/master/analysis.py#L19-34
 The components_ array has shape (n_components, n_features) so components_[i, j] is already giving you 
 the (signed) weights of the contribution of feature j to component i.
 If you want to get the indices of the top 3 features contributing to component i 
@@ -299,9 +300,35 @@ def getGroups(df, ncomp, nclust):
         plt.scatter(pca[labels==label,0], pca[labels==label,1], color=next(cycol), alpha=0.5)
     plt.show()
 
-getGroups(filtered_data, 6, 6)
+#getGroups(filtered_data, 6, 6)
 
 '''
 https://stackoverflow.com/questions/22984335/recovering-features-names-of-explained-variance-ratio-in-pca-with-sklearn
 https://www.kaggle.com/spidermanxyz/a-cluster-of-colors-principal-component-analysis
 '''
+##taken from:https://github.com/teddyroland/python-biplot/blob/master/biplot.py
+def biplot(df):
+    n = len(df.columns)
+    pca = PCA(n_components = n)
+    pca.fit(df)
+    xvector = pca.components_[0] 
+    yvector = pca.components_[1]
+
+    xs = pca.transform(df)[:,0]
+    ys = pca.transform(df)[:,1]
+
+    for i in range(len(xvector)):
+    # arrows project features (ie columns from csv) as vectors onto PC axes
+        plt.arrow(0, 0, xvector[i]*max(xs), yvector[i]*max(ys),
+                  color='r', width=0.0005, head_width=0.0025)
+        plt.text(xvector[i]*max(xs)*1.2, yvector[i]*max(ys)*1.2,
+                 list(df.columns.values)[i], color='r')
+
+    for i in range(len(xs)):
+    # circles project documents (ie rows from csv) as points onto PC axes
+        plt.plot(xs[i], ys[i], 'bo')
+        plt.text(xs[i]*1.2, ys[i]*1.2, list(df.index)[i], color='b')
+
+    plt.show()
+
+biplot(filtered_data)
