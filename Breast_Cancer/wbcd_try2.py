@@ -18,9 +18,8 @@ from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 from sklearn.neural_network import BernoulliRBM
 from sklearn.pipeline import Pipeline
 from sklearn.linear_model import LogisticRegression
-from sklearn import cross_validation
 
-
+ 
 def main():
     """Run experiment with multiple classifiers."""
     data = get_data()
@@ -54,9 +53,9 @@ def main():
         ('RBM 512, n_iter=100',
          Pipeline(steps=[('rbm', BernoulliRBM(n_components=512, n_iter=10)),
                          ('logistic', LogisticRegression(C=1))])),
-        ('NN 20:5', skflow.TensorFlowDNNClassifier(hidden_units=[20, 5],
-                                                   n_classes=data['n_classes'],
-                                                   steps=500)),
+        #('NN 20:5', skflow.TensorFlowDNNClassifier(hidden_units=[20, 5],
+        #                                           n_classes=data['n_classes'],
+        #                                           steps=500)),
         # ('NN 500:200 dropout',
         #  skflow.TensorFlowEstimator(model_fn=dropout_model,
         #                             n_classes=10,
@@ -100,7 +99,9 @@ def main():
                                      'testing_time': an_data['testing_time'],
                                      'accuracy': an_data['accuracy']}
 
-    print_website(classifier_data)
+    #print_website(classifier_data)
+    df_ = pd.DataFrame.from_dict(classifier_data, orient='index')
+    print(df_.head(20))
 
 
 def print_website(data):
@@ -241,7 +242,7 @@ def get_data(dataset='wbcd'):
 
         x, y = shuffle(x, y, random_state=0)
 
-        from sklearn.cross_validation import train_test_split
+        from sklearn.model_selection import train_test_split
         x_train, x_test, y_train, y_test = train_test_split(x, y,
                                                             test_size=0.33,
                                                             random_state=42)
@@ -311,7 +312,7 @@ def get_data(dataset='wbcd'):
 
         x, y = shuffle(x, y, random_state=0)
 
-        from sklearn.cross_validation import train_test_split
+        from sklearn.model_selection import train_test_split
         x_train, x_test, y_train, y_test = train_test_split(x, y,
                                                             test_size=0.33,
                                                             random_state=42)
