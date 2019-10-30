@@ -4,6 +4,7 @@
 
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 import time
 
 # Classifiers
@@ -82,11 +83,12 @@ def main():
         ('Naive Bayes', GaussianNB()),
         ('Gradient Boosting', GradientBoostingClassifier()),
         ('LDA', LinearDiscriminantAnalysis()),
-        ('QDA', QuadraticDiscriminantAnalysis())
+        ('QDA', QuadraticDiscriminantAnalysis()) 
     ]
 
     # Fit them all
     classifier_data = {}
+    fig, axes = plt.subplots(4, 5)
     for clf_name, clf in classifiers:
         print("#" * 80)
         print("Start fitting '%s' classifier." % clf_name)
@@ -94,11 +96,11 @@ def main():
         t0 = time.time()
         clf.fit(data['train']['X'][:examples], data['train']['y'][:examples])
         t1 = time.time()
-        an_data = analyze(clf, data, t1 - t0, clf_name=clf_name)
+        an_data, cm = analyze(clf, data, t1 - t0, clf_name=clf_name)
         classifier_data[clf_name] = {'training_time': t1 - t0,
                                      'testing_time': an_data['testing_time'],
                                      'accuracy': an_data['accuracy']}
-
+    
     #print_website(classifier_data)
     df_ = pd.DataFrame.from_dict(classifier_data, orient='index')
     print(df_.head(20))
@@ -186,20 +188,12 @@ def analyze(clf, data, fit_time, clf_name=''):
     print("Classifier: %s" % clf_name)
     print("Training time: %0.4fs" % fit_time)
     print("Testing time: %0.4fs" % results['testing_time'])
-    print("Confusion matrix:\n%s" %
-          metrics.confusion_matrix(data['test']['y'],
-                                   predicted))
+    cm = metrics.confusion_matrix(data['test']['y'], predicted)
+    print("Confusion matrix:\n%s" % cm)
     results['accuracy'] = metrics.accuracy_score(data['test']['y'], predicted)
     print("Accuracy: %0.4f" % results['accuracy'])
-
-    # Print example
-    # try_id = 1
-    # out = clf.predict(data['test']['X'][try_id])  # clf.predict_proba
-    # print("out: %s" % out)
-    # size = int(len(data['test']['X'][try_id])**(0.5))
-    # view_image(data['test']['X'][try_id].reshape((size, size)),
-    #            data['test']['y'][try_id])
-    return results
+    
+    return results, cm
 
 
 def view_image(image, label=""):
