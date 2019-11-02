@@ -5,6 +5,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.patches import Ellipse
 import time
 from math import pi
 from sklearn.preprocessing import StandardScaler
@@ -59,7 +60,7 @@ def get_data(id_loc, dataset='wbcd'):
                             {'benigndata': dfBw_norm.mean().values,
                                 'patientdata': Bworst_norm.values}]
                 }
-
+        df = df.drop(labels='id', axis=1)
         scaled_data = StandardScaler().fit(df).transform(df)
         pca = PCA(n_components = 2).fit(scaled_data)
         x_pca = pca.transform(scaled_data)
@@ -123,12 +124,17 @@ def get_cov_ellipse(cov, centre, nstd, **kwargs):
 
 def createBiplot(df, y, pca, x_pca):
     components = pd.DataFrame(pca.components_.T, index=df.columns, columns=['PCA1','PCA2'])
-    # plot size
-    plt.figure(figsize=(10,8))
-    # main scatterplot
-    plt.scatter(x_pca[:,0], x_pca[:,1], c=y, cmap='plasma', alpha=0.4, edgecolors='black', s=40)
-    # confidence ellipse
-    cov = np.cov(x_pca[:,0], x_pca[:,1])
+    ax = plt.subplot(111, aspect='equal')
+    for di in np.unique(y):
+        xpca = x_pca[y==di]
+        # confidence ellipse
+        comp1_mean = np.mean(xpca[:,0])
+        comp2_mean = np.mean(xpca[:,1])
+        cov = np.cov(xpca[:,0], xpca[:,1])
+        # main scatterplot
+        plt.scatter(xpca[:,0], xpca[:,1], c=di, cmap='plasma', alpha=0.4, edgecolors='black', s=40)
+        e = get_cov_ellipse(cov, (comp1_mean, comp2_mean), 3, fc=di, alpha=0.4)
+        ax.add_artist(e)
     plt.xlabel('First Principal Component')
     plt.ylabel('Second Principal Component')
     plt.ylim(15,-15)
@@ -151,7 +157,7 @@ def createBiplot(df, y, pca, x_pca):
     plt.show()
 
 if __name__ == '__main__':
-    d, df, y, pca, x_pca = get_data(19)
+    d, df, y, pca, x_pca = get_data(18)
     #title = 'Breast Cancer Diagnosis Radar\nPatient ID: {}'.format(d['id'])
     #createRadar(d, title)
     createBiplot(df, y, pca, x_pca)
