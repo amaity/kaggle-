@@ -69,25 +69,9 @@ percent = (weather_train.isnull().sum()/weather_train.isnull().count()*100).sort
 missing_weather_data  = pd.concat([total, percent], axis=1, keys=['Total', 'Percent'])
 print(missing_weather_data.head(9))
 #------------------------------------------------------------------------------
-df_ = train[['building_id']]
-df_ = df_.merge(building_metadata, on=['building_id'], how='left')
-del df_['building_id']
-train = pd.concat([train, df_], axis=1)
-#------------------------------------------------------------------------------
-df_ = test[['building_id']]
-df_ = df_.merge(building_metadata, on=['building_id'], how='left')
-del df_['building_id']
-test = pd.concat([test, df_], axis=1)
-print(test.tail())
-del df_, building_metadata
-#------------------------------------------------------------------------------
-df_ = train[['site_id','timestamp']]
-df_ = df_.merge(weather_train, on=['site_id','timestamp'], how='left')
-del df_['site_id'], df_['timestamp']
-train = pd.concat([train, df_], axis=1)
-
-df_ = test[['site_id','timestamp']]
-df_ = df_.merge(weather_test, on=['site_id','timestamp'], how='left')
-del df_['site_id'], df_['timestamp']
-test = pd.concat([test, df_], axis=1)
-del df_, weather_train, weather_test
+train = train.merge(building_metadata, on='building_id', how='left')
+test = test.merge(building_metadata, on='building_id', how='left')
+train = train.merge(weather_train, on=['site_id', 'timestamp'], how='left')
+test = test.merge(weather_test, on=['site_id', 'timestamp'], how='left')
+del weather_train, weather_test, building_metadata
+gc.collect()
