@@ -16,62 +16,66 @@ import matplotlib.patches as patches
 #    zipf.extractall('.')
 #------------------------------------------------------------------------------
 #https://hackersandslackers.com/downcast-numerical-columns-python-pandas/
-print('train data:');print('-'*20)
-train = pd.read_csv('train.csv', parse_dates=['timestamp'],
+import os, feather
+
+if os.path.isfile("train.feather"):
+    train = read_feather('train.feather')
+    test = read_feather('test.feather')
+else:
+    print('train data:')
+    train = pd.read_csv('train.csv', 
                     dtype={'building_id':np.uint16, 'meter':np.uint8, 'meter_reading':np.float64})
-print(train.info(memory_usage='deep'))
-#------------------------------------------------------------------------------
-print('test data:');print('-'*20)
-test = pd.read_csv('test.csv', parse_dates=['timestamp'],
+    train['timestamp'] = pd.to_datetime(train['timestamp'], format="%Y %m %d %H:%M:%S")
+    print(train.info(memory_usage='deep'))
+    print('-'*20);print('test data:')
+    test = pd.read_csv('test.csv', 
                    dtype={'row_id':np.uint16,'building_id':np.uint16,'meter':np.uint16})
-print(test.info(memory_usage='deep'))
-#------------------------------------------------------------------------------
-print('weather_train data:');print('-'*20)
-weather_train = pd.read_csv('weather_train.csv',dtype={'site_id':np.uint16})
-weather_train['timestamp'] = pd.to_datetime(weather_train['timestamp'],infer_datetime_format=True)
-weather_train[['air_temperature', 'cloud_coverage',
+    test['timestamp'] = pd.to_datetime(test['timestamp'], format="%Y %m %d %H:%M:%S")
+    print(test.info(memory_usage='deep'))
+    print('-'*20);print('weather_train data:')
+    weather_train = pd.read_csv('weather_train.csv',dtype={'site_id':np.uint16})
+    weather_train['timestamp'] = pd.to_datetime(weather_train['timestamp'],infer_datetime_format=True)
+    weather_train[['air_temperature', 'cloud_coverage',
        'dew_temperature', 'precip_depth_1_hr', 'sea_level_pressure',
        'wind_direction', 'wind_speed']] = weather_train[['air_temperature', 'cloud_coverage',
        'dew_temperature', 'precip_depth_1_hr', 'sea_level_pressure',
        'wind_direction', 'wind_speed']].apply(pd.to_numeric,downcast='float')
-print(weather_train.info(memory_usage='deep'))
-#------------------------------------------------------------------------------
-print('weather_test data:');print('-'*20)
-weather_test = pd.read_csv('weather_test.csv',dtype={'site_id':np.uint16})
-weather_test['site_id'] = weather_test['site_id'].apply(pd.to_numeric,downcast='unsigned')
-weather_test['timestamp'] = pd.to_datetime(weather_test['timestamp'],infer_datetime_format=True)
-weather_test[['air_temperature', 'cloud_coverage',
+    print(weather_train.info(memory_usage='deep'))
+    print('-'*20);print('weather_test data:')
+    weather_test = pd.read_csv('weather_test.csv',dtype={'site_id':np.uint16})
+    weather_test['site_id'] = weather_test['site_id'].apply(pd.to_numeric,downcast='unsigned')
+    weather_test['timestamp'] = pd.to_datetime(weather_test['timestamp'],infer_datetime_format=True)
+    weather_test[['air_temperature', 'cloud_coverage',
        'dew_temperature', 'precip_depth_1_hr', 'sea_level_pressure',
        'wind_direction', 'wind_speed']] = weather_test[['air_temperature', 'cloud_coverage',
        'dew_temperature', 'precip_depth_1_hr', 'sea_level_pressure',
        'wind_direction', 'wind_speed']].apply(pd.to_numeric,downcast='float')
-print(weather_test.info(memory_usage='deep'))
+    print(weather_test.info(memory_usage='deep'))
+    print('-'*20);print('building_metadata data:')
+    building_metadata = pd.read_csv('building_metadata.csv')
+    building_metadata['primary_use'] = building_metadata['primary_use'].astype('category')
+    print(building_metadata.info(memory_usage='deep'))
+    train = train.merge(building_metadata, on='building_id', how='left')
+    test = test.merge(building_metadata, on='building_id', how='left')
+    train = train.merge(weather_train, on=['site_id', 'timestamp'], how='left')
+    test = test.merge(weather_test, on=['site_id', 'timestamp'], how='left')
+    del weather_train, weather_test, building_metadata
+    gc.collect()
+    
+    train.to_feather('train.feather')
+    test.to_feather('test.feather')
 #------------------------------------------------------------------------------
-print('building_metadata data:');print('-'*20)
-building_metadata = pd.read_csv('building_metadata.csv')
-building_metadata['primary_use'] = building_metadata['primary_use'].astype('category')
-print(building_metadata.info(memory_usage='deep'))
+print(train.tail())
 #------------------------------------------------------------------------------
-sample_submission = pd.read_csv('sample_submission.csv')
-print('sample_submission:',sample_submission.shape)
+#Frequency of primary_use
+train.groupby(['primary_use']).agg({'site_id':'nunique'}).rename(columns={'site_id':'N'}) 
 #------------------------------------------------------------------------------
-plt.figure(figsize = (15,5))
-train['meter_reading'].plot()
-#plt.show()
+train['square_feet'].hist(bins=32) #is this is wrong?
+plt.xlabel("square_feet")
+plt.ylabel("Frequency")
 #------------------------------------------------------------------------------
-total = train.isnull().sum().sort_values(ascending = False)
-percent = (train.isnull().sum()/train.isnull().count()*100).sort_values(ascending = False)
-missing_train_data  = pd.concat([total, percent], axis=1, keys=['Total', 'Percent'])
-print(missing_train_data.head())
+for label, df in train.groupby(['primary_use']):
+    ax = sns.kdeplot(df['square_feet'], label=label, shade=True)
+ax.set(xlabel='square_feet', ylabel='density')
+plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.) #label colouring needs fixing
 #------------------------------------------------------------------------------
-total = weather_train.isnull().sum().sort_values(ascending = False)
-percent = (weather_train.isnull().sum()/weather_train.isnull().count()*100).sort_values(ascending = False)
-missing_weather_data  = pd.concat([total, percent], axis=1, keys=['Total', 'Percent'])
-print(missing_weather_data.head(9))
-#------------------------------------------------------------------------------
-train = train.merge(building_metadata, on='building_id', how='left')
-test = test.merge(building_metadata, on='building_id', how='left')
-train = train.merge(weather_train, on=['site_id', 'timestamp'], how='left')
-test = test.merge(weather_test, on=['site_id', 'timestamp'], how='left')
-del weather_train, weather_test, building_metadata
-gc.collect()
